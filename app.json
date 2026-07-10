@@ -1,0 +1,79 @@
+{
+  "expo": {
+    "name": "MotoTune",
+    "slug": "MotoTune",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mototune",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "MotoTune cần quyền vị trí để ghi lại quãng đường và vẽ bản đồ hành trình.",
+        "NSLocationAlwaysUsageDescription": "Cho phép ứng dụng theo dõi GPS ngay cả khi chạy ngầm để không mất dữ liệu."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "SEND_SMS"
+      ],
+      "package": "com.dat363899.MotoTune",
+      "config": {
+        "googleMaps": {
+          "apiKey": "NẾU_BẠN_CÓ_HIỆN_BẢN_ĐỒ_THÌ_DÁN_API_KEY_GOOGLE_VÀO_ĐÂY"
+        }
+      }
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-video",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cho phép MotoTune sử dụng vị trí của bạn để theo dõi và tính toán quãng đường bảo trì."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a09ceeac-fd13-4175-ac86-39df3b34c472"
+      }
+    }
+  }
+}
