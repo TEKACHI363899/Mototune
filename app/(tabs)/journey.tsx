@@ -4,10 +4,11 @@ import * as Location from 'expo-location';
 import { Accelerometer } from 'expo-sensors';
 import * as SMS from 'expo-sms';
 import * as Speech from 'expo-speech';
+import * as TaskManager from 'expo-task-manager';
 import { addDoc, arrayUnion, collection, doc, getDoc, increment, setDoc } from 'firebase/firestore';
-import { AlertTriangle, CheckCircle, Clock, Droplet, Gauge, ListMusic, MapPin, Music, Pause, Play, PlusCircle, Settings, ShieldCheck, SkipBack, SkipForward, Smartphone, Square, Trash2 } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, Clock, Droplet, Gauge, ListMusic, MapPin, Music, Play, PlusCircle, SkipBack, SkipForward, Smartphone, Square, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Dimensions, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, DeviceEventEmitter } from 'react-native';
 import Map from '../../components/Map';
 import { db } from '../../firebaseConfig';
 import { IBike } from '../../interfaces/bike';
@@ -16,7 +17,7 @@ import { useAppStore } from '../../store/useAppStore';
 // 🛑 IMPORT HÀM CỘNG ĐIỂM HUY HIỆU
 import { recordUserStat } from '../../utils/badgeHelper';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', success: '#4ADE80', warning: '#F59E0B', info: '#3B82F6', hudAccent: '#FF4500' };
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -27,6 +28,28 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 };
 
 type LocalSong = { uri: string; name: string };
+
+const LOCATION_TRACKING_TASK = 'background-location-tracking';
+
+// Define the background location task at root level
+TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
+  if (error) {
+    console.error("Background location task error:", error);
+    return;
+  }
+  if (data) {
+    const { locations } = data as any;
+    if (locations && locations.length > 0) {
+      const loc = locations[0];
+      DeviceEventEmitter.emit('background-location-update', {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        speed: loc.coords.speed,
+        timestamp: loc.timestamp
+      });
+    }
+  }
+});
 
 export default function JourneyScreen() {
   const currentUser = useAppStore(state => state.currentUser);
@@ -66,6 +89,30 @@ export default function JourneyScreen() {
     };
   }, []);
 
+  // Listen to background location updates
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('background-location-update', (data) => {
+      if (!isTracking) return;
+      
+      const newCoord = { latitude: data.latitude, longitude: data.longitude };
+      const speedKmh = (data.speed && data.speed > 0) ? data.speed * 3.6 : 0;
+      setCurrentSpeed(speedKmh);
+
+      setRouteCoords((prev) => {
+        if (prev.length > 0) {
+          const lastCoord = prev[prev.length - 1];
+          const dist = calculateDistance(lastCoord.latitude, lastCoord.longitude, newCoord.latitude, newCoord.longitude);
+          setTotalDistance((d) => d + dist);
+        }
+        return [...prev, newCoord];
+      });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isTracking]);
+
   if (Platform.OS === 'web') {
     return (
       <SafeAreaView style={styles.webContainer}>
@@ -76,20 +123,14 @@ export default function JourneyScreen() {
     );
   }
 
-  const pickMusicFiles = async () => {
+  const pickSongs = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true, multiple: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', multiple: true });
       if (!result.canceled && result.assets) {
         const newSongs = result.assets.map(asset => ({ uri: asset.uri, name: asset.name }));
         setPlaylist(prev => [...prev, ...newSongs]);
       }
-    } catch (error) { Alert.alert('Lỗi', 'Không thể tải nhạc.'); }
-  };
-
-  const removeSong = (index: number) => {
-    if (index === currentSongIndex) { stopMusic(); }
-    setPlaylist(prev => prev.filter((_, i) => i !== index));
-    if (index < currentSongIndex) { setCurrentSongIndex(prev => prev - 1); }
+    } catch (e) { Alert.alert('Lỗi', 'Không thể chọn nhạc.'); }
   };
 
   const playMusic = async (index: number) => {
@@ -121,8 +162,13 @@ export default function JourneyScreen() {
 
   const handlePressStart = async () => {
     if (!currentUser) return Alert.alert("Lỗi", "Vui lòng đăng nhập.");
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return Alert.alert("Lỗi", "Cần quyền GPS để vẽ bản đồ.");
+    const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+    if (foregroundStatus !== 'granted') return Alert.alert("Lỗi", "Cần quyền GPS để vẽ bản đồ.");
+
+    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    if (backgroundStatus !== 'granted') {
+      console.warn("Background location permission denied.");
+    }
 
     if (bikes.length === 0) {
       Alert.alert("Chưa có xe", "Vui lòng thêm xe vào Garage trước khi bắt đầu hành trình.");
@@ -178,23 +224,45 @@ export default function JourneyScreen() {
       setElapsedTime(`${mins}:${secs}`);
     }, 1000);
 
-    locationSubscription.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 },
-      (loc) => {
-        const newCoord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-        const speedKmh = (loc.coords.speed && loc.coords.speed > 0) ? loc.coords.speed * 3.6 : 0;
-        setCurrentSpeed(speedKmh);
+    // Register Background location tracking task
+    const isTaskRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TRACKING_TASK);
+    if (!isTaskRegistered) {
+      console.log("Registering background location task...");
+    }
 
-        setRouteCoords((prev) => {
-          if (prev.length > 0) {
-            const lastCoord = prev[prev.length - 1];
-            const dist = calculateDistance(lastCoord.latitude, lastCoord.longitude, newCoord.latitude, newCoord.longitude);
-            setTotalDistance((d) => d + dist);
-          }
-          return [...prev, newCoord];
-        });
-      }
-    );
+    try {
+      await Location.startLocationUpdatesAsync(LOCATION_TRACKING_TASK, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 2000,
+        distanceInterval: 5,
+        foregroundService: {
+          notificationTitle: "MotoTune Đang Hoạt Động",
+          notificationBody: "Hành trình và bản đồ đang được chạy ngầm tự động.",
+          notificationColor: "#E31B23"
+        },
+        pausesUpdatesAutomatically: false
+      });
+    } catch (err) {
+      console.error("Failed to start background location updates, fallback to foreground watch:", err);
+      // Fallback to foreground position watching
+      locationSubscription.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 },
+        (loc) => {
+          const newCoord = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          const speedKmh = (loc.coords.speed && loc.coords.speed > 0) ? loc.coords.speed * 3.6 : 0;
+          setCurrentSpeed(speedKmh);
+
+          setRouteCoords((prev) => {
+            if (prev.length > 0) {
+              const lastCoord = prev[prev.length - 1];
+              const dist = calculateDistance(lastCoord.latitude, lastCoord.longitude, newCoord.latitude, newCoord.longitude);
+              setTotalDistance((d) => d + dist);
+            }
+            return [...prev, newCoord];
+          });
+        }
+      );
+    }
 
     Accelerometer.setUpdateInterval(500);
     accelSubscription.current = Accelerometer.addListener(accelerometerData => {
@@ -237,7 +305,18 @@ export default function JourneyScreen() {
 
   const stopJourney = async () => {
     if (!isTracking) return;
+    stopMusic();
     
+    // Stop background location updates
+    try {
+      const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      if (hasStarted) {
+        await Location.stopLocationUpdatesAsync(LOCATION_TRACKING_TASK);
+      }
+    } catch (err) {
+      console.warn("Stop background updates warning:", err);
+    }
+
     if (locationSubscription.current) locationSubscription.current.remove();
     if (accelSubscription.current) accelSubscription.current.remove();
     if (hudTimeInterval.current) clearInterval(hudTimeInterval.current);
@@ -338,207 +417,210 @@ export default function JourneyScreen() {
 
       <Modal visible={showPlaylistModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.playlistContainer}>
-          <View style={styles.playlistHeader}>
-            <ListMusic size={24} color={COLORS.primary} />
-            <Text style={styles.playlistTitle}>DANH SÁCH NHẠC</Text>
-            <TouchableOpacity onPress={() => setShowPlaylistModal(false)} style={{marginLeft: 'auto'}}><Text style={{color: COLORS.primary, fontWeight: 'bold'}}>Đóng</Text></TouchableOpacity>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>BẢN TIN NHẠC</Text>
+            <TouchableOpacity onPress={() => setShowPlaylistModal(false)}><X size={28} color={COLORS.textDim} /></TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.addMusicBtn} onPress={pickMusicFiles}>
+          <TouchableOpacity style={styles.importBtn} onPress={pickSongs}>
             <PlusCircle size={20} color="white" />
-            <Text style={{color: 'white', fontWeight: 'bold'}}>THÊM FILE NHẠC TỪ MÁY (.MP3)</Text>
+            <Text style={styles.importBtnText}>Nhập file nhạc từ điện thoại</Text>
           </TouchableOpacity>
-          <FlatList
-            data={playlist} keyExtractor={(item, index) => index.toString()}
-            ListEmptyComponent={<Text style={{color: COLORS.textDim, textAlign: 'center', marginTop: 40}}>Chưa có bài hát nào trong Playlist.</Text>}
+          <FlatList 
+            data={playlist}
+            keyExtractor={(_, index) => index.toString()}
+            contentContainerStyle={{ padding: 20 }}
             renderItem={({ item, index }) => (
-              <View style={[styles.songItem, currentSongIndex === index && styles.songItemActive]}>
-                <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}} onPress={() => playMusic(index)}>
-                  {currentSongIndex === index && isPlaying ? <Play size={16} color={COLORS.hudAccent} style={{marginRight: 10}} /> : <Music size={16} color={COLORS.textDim} style={{marginRight: 10}} />}
-                  <Text style={[styles.songName, currentSongIndex === index && {color: COLORS.hudAccent}]} numberOfLines={1}>{item.name}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeSong(index)} style={{padding: 10}}><Trash2 size={20} color="#EF4444" /></TouchableOpacity>
-              </View>
+              <TouchableOpacity style={[styles.songItem, index === currentSongIndex && styles.activeSongItem]} onPress={() => playMusic(index)}>
+                <Music size={18} color={index === currentSongIndex ? COLORS.primary : COLORS.textDim} />
+                <Text style={[styles.songName, index === currentSongIndex && styles.activeSongName]} numberOfLines={1}>{item.name}</Text>
+              </TouchableOpacity>
             )}
+            ListEmptyComponent={<Text style={styles.emptyPlaylist}>Chưa có bài hát nào được chọn.</Text>}
           />
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={showSummary} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.summaryContainer}>
-          <View style={styles.summaryHeader}><CheckCircle size={30} color={COLORS.success} /><Text style={styles.summaryTitle}>TỔNG KẾT CHUYẾN ĐI</Text></View>
-          <ScrollView style={styles.summaryBody} showsVerticalScrollIndicator={false}>
-            <View style={styles.summaryMapBox}><Map routeCoords={routeCoords} COLORS={COLORS} /></View>
-            <View style={styles.statsRow}>
-              <View style={styles.summaryStat}><MapPin size={20} color={COLORS.primary} /><Text style={styles.sStatValue}>{tripStats?.distance} <Text style={styles.sStatUnit}>km</Text></Text><Text style={styles.sStatLabel}>Quãng đường</Text></View>
-              <View style={styles.summaryStat}><Clock size={20} color={COLORS.info} /><Text style={styles.sStatValue}>{tripStats?.time} <Text style={styles.sStatUnit}>phút</Text></Text><Text style={styles.sStatLabel}>Thời gian</Text></View>
-              <View style={styles.summaryStat}><Gauge size={20} color={COLORS.warning} /><Text style={styles.sStatValue}>{tripStats?.speed} <Text style={styles.sStatUnit}>km/h</Text></Text><Text style={styles.sStatLabel}>Tốc độ TB</Text></View>
+      {/* Summary Dialog */}
+      <Modal visible={showSummary} transparent animationType="fade">
+        <View style={styles.summaryOverlay}>
+          <View style={styles.summaryCard}>
+            <CheckCircle size={60} color={COLORS.success} style={{ marginBottom: 15 }} />
+            <Text style={styles.summaryTitle}>HÀNH TRÌNH HOÀN THÀNH</Text>
+            <View style={styles.summaryGrid}>
+              <View style={styles.gridItem}><Text style={styles.gridVal}>{tripStats?.distance} km</Text><Text style={styles.gridLbl}>Quãng đường</Text></View>
+              <View style={styles.gridItem}><Text style={styles.gridVal}>{tripStats?.time} phút</Text><Text style={styles.gridLbl}>Thời gian</Text></View>
+              <View style={styles.gridItem}><Text style={styles.gridVal}>{tripStats?.speed} km/h</Text><Text style={styles.gridLbl}>Vận tốc TB</Text></View>
+              <View style={styles.gridItem}><Text style={styles.gridVal}>+{tripStats?.points}</Text><Text style={styles.gridLbl}>Điểm thưởng</Text></View>
             </View>
-            <Text style={styles.sectionTitle}>SỨC KHỎE XE BỊ TRỪ HAO</Text>
-            <View style={styles.maintenanceBox}>
-              <View style={styles.maintItem}><Droplet size={20} color={COLORS.textDim} /><Text style={styles.maintText}>Nhớt máy</Text><Text style={styles.maintMinus}>-{tripStats?.distance} km</Text></View>
-              <View style={styles.maintItem}><Settings size={20} color={COLORS.textDim} /><Text style={styles.maintText}>Nhông sên dĩa</Text><Text style={styles.maintMinus}>-{tripStats?.distance} km</Text></View>
-            </View>
-            <Text style={styles.sectionTitle}>THÀNH TÍCH AN TOÀN</Text>
-            <View style={styles.gamificationBox}>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15}}><ShieldCheck size={28} color={COLORS.success} /><View><Text style={{color: COLORS.text, fontSize: 16, fontWeight: 'bold'}}>Điểm an toàn nhận được</Text><Text style={{color: COLORS.success, fontSize: 24, fontWeight: '900'}}>+{tripStats?.points} EXP</Text></View></View>
-            </View>
-          </ScrollView>
-          <View style={styles.summaryFooter}><TouchableOpacity style={styles.closeSummaryBtn} onPress={closeSummary}><Text style={{color: 'white', fontWeight: 'bold', fontSize: 16}}>HOÀN TẤT</Text></TouchableOpacity></View>
-        </SafeAreaView>
+            {tripStats?.badges && tripStats.badges.length > 0 && (
+              <View style={styles.badgesEarnedBox}>
+                <Text style={styles.badgesLabel}>Huy hiệu đạt được:</Text>
+                {tripStats.badges.map((b: string, i: number) => <Text key={i} style={styles.badgeTxt}>{b}</Text>)}
+              </View>
+            )}
+            <TouchableOpacity style={styles.closeSummaryBtn} onPress={closeSummary}><Text style={styles.closeSummaryBtnTxt}>OK, QUAY LẠI GARAGE</Text></TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
-      {/* Bike Selection Modal */}
-      <Modal visible={showBikeSelectModal} animationType="slide" transparent>
+      {/* Multiple Bikes Selection Modal */}
+      <Modal visible={showBikeSelectModal} transparent animationType="slide">
         <View style={styles.bikeSelectOverlay}>
-          <View style={styles.bikeSelectBox}>
-            <View style={styles.bikeSelectHeader}>
-              <Text style={styles.bikeSelectTitle}>CHỌN XE SỬ DỤNG</Text>
-              <TouchableOpacity onPress={() => setShowBikeSelectModal(false)}>
-                <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>Hủy</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.bikeSelectSub}>
-              Vui lòng chọn chiếc xe bạn sẽ sử dụng cho hành trình này để ghi nhận hành trình và ODO chính xác:
-            </Text>
-            <FlatList
+          <View style={styles.bikeSelectCard}>
+            <Text style={styles.bikeSelectTitle}>CHỌN XẾ YÊU ĐỒNG HÀNH</Text>
+            <Text style={styles.bikeSelectSub}>Chọn xe bạn muốn sử dụng để ghi nhận quãng đường đi:</Text>
+            <FlatList 
               data={bikes}
-              keyExtractor={(item, index) => item.id || index.toString()}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ gap: 10, marginVertical: 15 }}
               renderItem={({ item }) => (
-                <TouchableOpacity
+                <TouchableOpacity 
                   style={styles.bikeSelectItem}
                   onPress={() => executeStartJourney(item.id)}
                 >
-                  <Text style={styles.bikeSelectName}>{item.nickname}</Text>
-                  <Text style={styles.bikeSelectDesc}>{item.brand} {item.model} • ODO: {Math.floor(item.odo || 0)} km</Text>
+                  <Gauge size={24} color={COLORS.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.bikeSelectNick}>{item.nickname}</Text>
+                    <Text style={styles.bikeSelectInfo}>{item.brand} {item.model} (ODO: {item.odo || 0} km)</Text>
+                  </View>
                 </TouchableOpacity>
               )}
             />
+            <TouchableOpacity 
+              style={styles.cancelBikeSelectBtn}
+              onPress={() => setShowBikeSelectModal(false)}
+            >
+              <Text style={styles.cancelBikeSelectBtnText}>HỦY BỎ</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      <View style={styles.mapContainer}>
-        {routeCoords.length > 0 ? (
-          <Map routeCoords={routeCoords} COLORS={COLORS} />
-        ) : (
-          <View style={styles.mapPlaceholder}><MapPin size={40} color={COLORS.textDim} /><Text style={{color: COLORS.textDim, marginTop: 10}}>Bản đồ GPS đang chờ tín hiệu...</Text></View>
-        )}
-      </View>
-
-      <View style={styles.hudPanel}>
-        <View style={styles.hudTopRow}>
-          <View style={styles.hudBox}>
-            <Text style={styles.hudLabel}>THỜI GIAN</Text>
-            <Text style={styles.hudValueSmall}>{elapsedTime}</Text>
-          </View>
-          <View style={styles.hudBox}>
-            <Text style={styles.hudLabel}>QUÃNG ĐƯỜNG</Text>
-            <Text style={styles.hudValueSmall}>{totalDistance.toFixed(1)} <Text style={{fontSize: 16}}>km</Text></Text>
-          </View>
-        </View>
-        <View style={styles.speedoBox}>
-          <Text style={styles.speedoValue}>{currentSpeed.toFixed(0)}</Text>
-          <Text style={styles.speedoLabel}>KM/H</Text>
-        </View>
-      </View>
-
-      <View style={styles.controlPanel}>
-        <View style={styles.musicPlayerPanel}>
-          <TouchableOpacity style={styles.playlistBtn} onPress={() => setShowPlaylistModal(true)}><ListMusic size={22} color={COLORS.primary} /></TouchableOpacity>
-          <View style={styles.musicControls}>
-            <TouchableOpacity onPress={prevSong} style={styles.musicCtrlBtn}><SkipBack size={24} color="white" fill="white" /></TouchableOpacity>
-            <TouchableOpacity onPress={togglePlayPause} style={[styles.musicCtrlBtn, {backgroundColor: COLORS.primary, width: 50, height: 50, borderRadius: 25}]}>
-              {isPlaying ? <Pause size={24} color="white" fill="white" /> : <Play size={24} color="white" fill="white" style={{marginLeft: 4}}/>}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={nextSong} style={styles.musicCtrlBtn}><SkipForward size={24} color="white" fill="white" /></TouchableOpacity>
-          </View>
-        </View>
-
-        {!isTracking ? (
+      {/* Main UI HUD */}
+      {!isTracking ? (
+        <View style={styles.lobbyContainer}>
+          <MapPin size={80} color={COLORS.primary} style={{ marginBottom: 20 }} />
+          <Text style={styles.lobbyTitle}>HỆ THỐNG ĐỒNG HÀNH H.U.D</Text>
+          <Text style={styles.lobbyDesc}>Theo dõi hành trình thông minh, cảnh báo va chạm khẩn cấp và kết nối âm nhạc đồng hành.</Text>
           <TouchableOpacity style={styles.startBtn} onPress={handlePressStart}>
-            <Play size={24} color="white" fill="white" />
-            <Text style={styles.btnText}>BẮT ĐẦU HÀNH TRÌNH</Text>
+            <Play size={24} color="white" />
+            <Text style={styles.startBtnText}>BẮT ĐẦU BÀO TOUR</Text>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.stopBtn} onPress={stopJourney}>
-            <Square size={24} color="white" fill="white" />
-            <Text style={styles.btnText}>KẾT THÚC HÀNH TRÌNH</Text>
-          </TouchableOpacity>
-        )}
+        </View>
+      ) : (
+        <View style={styles.hudContainer}>
+          {/* HUD Speed and Info */}
+          <View style={styles.hudMain}>
+            <View style={styles.speedCircle}>
+              <Text style={styles.speedVal}>{Math.round(currentSpeed)}</Text>
+              <Text style={styles.speedUnit}>KM/H</Text>
+            </View>
+            <View style={styles.hudStatsRow}>
+              <View style={styles.statBox}><Clock size={16} color={COLORS.hudAccent} /><Text style={styles.statVal}>{elapsedTime}</Text><Text style={styles.statLbl}>THỜI GIAN</Text></View>
+              <View style={styles.statBox}><Droplet size={16} color={COLORS.hudAccent} /><Text style={styles.statVal}>{totalDistance.toFixed(2)}</Text><Text style={styles.statLbl}>KHOẢNG CÁCH</Text></View>
+            </View>
+          </View>
 
-        <TouchableOpacity style={styles.testSosBtn} onPress={triggerCrashProtocol}>
-          <AlertTriangle size={20} color={COLORS.primary} />
-          <Text style={{color: COLORS.primary, fontWeight: 'bold', fontSize: 16}}>TEST CẢNH BÁO SỰ CỐ</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Map Section */}
+          <View style={styles.mapContainer}>
+            <Map routeCoords={routeCoords} />
+          </View>
+
+          {/* Music Mini Player & Controls */}
+          <View style={styles.musicAndControlRow}>
+            {playlist.length > 0 ? (
+              <View style={styles.miniPlayer}>
+                <Text style={styles.miniSongName} numberOfLines={1}>{playlist[currentSongIndex].name}</Text>
+                <View style={styles.miniControls}>
+                  <TouchableOpacity onPress={prevSong}><SkipBack size={20} color="white" /></TouchableOpacity>
+                  <TouchableOpacity onPress={togglePlayPause} style={styles.playPauseBtn}><Text style={{color: 'black', fontSize: 10, fontWeight: 'bold'}}>{isPlaying ? 'PAUSE' : 'PLAY'}</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={nextSong}><SkipForward size={20} color="white" /></TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.noMusicBtn} onPress={() => setShowPlaylistModal(true)}>
+                <Music size={18} color="white" />
+                <Text style={styles.noMusicBtnTxt}>CHỌN NHẠC ĐỒNG HÀNH</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.hudControls}>
+              {playlist.length > 0 && <TouchableOpacity style={styles.hudCircleBtn} onPress={() => setShowPlaylistModal(true)}><ListMusic size={20} color="white" /></TouchableOpacity>}
+              <TouchableOpacity style={styles.stopBtn} onPress={stopJourney}><Square size={24} color="white" /><Text style={styles.stopBtnText}>KẾT THÚC</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  webContainer: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  webTitle: { color: COLORS.text, fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 15 },
-  webSub: { color: COLORS.textDim, fontSize: 16, textAlign: 'center', lineHeight: 24 },
-  mapContainer: { flex: 1, backgroundColor: '#111', borderBottomWidth: 2, borderBottomColor: COLORS.hudAccent },
-  mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  hudPanel: { backgroundColor: '#0A0A0A', padding: 20, alignItems: 'center' },
-  hudTopRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 20 },
-  hudBox: { alignItems: 'center' },
-  hudLabel: { color: COLORS.hudAccent, fontSize: 12, fontWeight: '900', letterSpacing: 2, opacity: 0.8 },
-  hudValueSmall: { color: 'white', fontSize: 32, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace' },
-  speedoBox: { alignItems: 'center', justifyContent: 'center', width: 200, height: 200, borderRadius: 100, borderWidth: 4, borderColor: '#222', borderTopColor: COLORS.hudAccent },
-  speedoValue: { color: COLORS.hudAccent, fontSize: 85, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace', height: 95 },
-  speedoLabel: { color: '#666', fontSize: 18, fontWeight: '900', letterSpacing: 4 },
-  controlPanel: { padding: 20, backgroundColor: COLORS.bg, paddingBottom: Platform.OS === 'ios' ? 30 : 20 },
-  musicPlayerPanel: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1A1A1A', padding: 15, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: '#333' },
-  playlistBtn: { padding: 10, backgroundColor: 'rgba(227, 27, 35, 0.1)', borderRadius: 12 },
-  musicControls: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  musicCtrlBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  startBtn: { backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, borderRadius: 15, gap: 10 },
-  stopBtn: { backgroundColor: '#1A1A1A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, borderRadius: 15, gap: 10, borderWidth: 2, borderColor: '#333' },
-  btnText: { color: 'white', fontWeight: '900', fontSize: 18, letterSpacing: 1 },
-  
-  testSosBtn: { marginTop: 15, backgroundColor: 'rgba(227, 27, 35, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderRadius: 15, gap: 10, borderWidth: 1, borderColor: COLORS.primary },
-
+  webContainer: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center', padding: 30 },
+  webTitle: { color: COLORS.primary, fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 10, textAlign: 'center' },
+  webSub: { color: COLORS.textDim, fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  lobbyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
+  lobbyTitle: { color: COLORS.text, fontSize: 24, fontWeight: '900', letterSpacing: 2, marginBottom: 10, textAlign: 'center' },
+  lobbyDesc: { color: COLORS.textDim, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 40 },
+  startBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, paddingHorizontal: 30, paddingVertical: 18, borderRadius: 30, alignItems: 'center', gap: 10, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+  startBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
+  hudContainer: { flex: 1, justifyContent: 'space-between', padding: 20 },
+  hudMain: { alignItems: 'center', marginTop: 10 },
+  speedCircle: { width: 140, height: 140, borderRadius: 70, borderColor: COLORS.hudAccent, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0B0B', borderStyle: 'solid', borderWidth: 4, shadowColor: COLORS.hudAccent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 15, elevation: 10 },
+  speedVal: { color: 'white', fontSize: 56, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace' },
+  speedUnit: { color: COLORS.hudAccent, fontSize: 11, fontWeight: 'bold', letterSpacing: 2 },
+  hudStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginTop: 25 },
+  statBox: { alignItems: 'center' },
+  statVal: { color: 'white', fontSize: 20, fontWeight: 'bold', marginVertical: 4 },
+  statLbl: { color: COLORS.textDim, fontSize: 10, letterSpacing: 1 },
+  mapContainer: { flex: 1, marginVertical: 20, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#222', backgroundColor: COLORS.card },
+  musicAndControlRow: { gap: 15 },
+  miniPlayer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0A0A0A', padding: 12, borderRadius: 15, borderWidth: 1, borderColor: '#222' },
+  miniSongName: { color: 'white', fontSize: 13, fontWeight: '600', flex: 1, marginRight: 15 },
+  miniControls: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  playPauseBtn: { backgroundColor: 'white', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  noMusicBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1A1A1A', padding: 12, borderRadius: 15, borderWidth: 1, borderColor: '#222' },
+  noMusicBtnTxt: { color: 'white', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
+  hudControls: { flexDirection: 'row', gap: 15, alignItems: 'center' },
+  hudCircleBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  stopBtn: { flex: 1, flexDirection: 'row', backgroundColor: '#333', paddingVertical: 14, borderRadius: 25, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  stopBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 2 },
+  crashOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: 30 },
+  crashTitle: { color: 'white', fontSize: 32, fontWeight: '900', letterSpacing: 2, marginVertical: 15 },
+  crashSub: { color: 'white', fontSize: 16, opacity: 0.8 },
+  countdownText: { color: 'white', fontSize: 80, fontWeight: '900', marginVertical: 20 },
+  safeBtn: { backgroundColor: 'white', paddingHorizontal: 30, paddingVertical: 18, borderRadius: 30, elevation: 8 },
+  safeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
   playlistContainer: { flex: 1, backgroundColor: COLORS.bg },
-  playlistHeader: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#333', gap: 10 },
-  playlistTitle: { color: 'white', fontWeight: '900', fontSize: 18, letterSpacing: 1 },
-  addMusicBtn: { backgroundColor: '#222', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, margin: 20, borderRadius: 12, gap: 10, borderWidth: 1, borderColor: '#444' },
-  songItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#222' },
-  songItemActive: { backgroundColor: 'rgba(255, 69, 0, 0.1)' },
-  songName: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  crashOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(227, 27, 35, 0.95)', zIndex: 100, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  crashTitle: { color: 'white', fontSize: 30, fontWeight: '900', marginTop: 20 },
-  crashSub: { color: 'white', fontSize: 16, marginTop: 10 },
-  countdownText: { color: 'white', fontSize: 100, fontWeight: '900', marginTop: 20 },
-  safeBtn: { backgroundColor: '#111', paddingHorizontal: 40, paddingVertical: 20, borderRadius: 30, marginTop: 40, borderWidth: 2, borderColor: 'white' },
-  safeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  summaryContainer: { flex: 1, backgroundColor: COLORS.bg },
-  summaryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#333', gap: 10 },
-  summaryTitle: { color: COLORS.success, fontSize: 20, fontWeight: '900', letterSpacing: 1 },
-  summaryBody: { flex: 1, padding: 20 },
-  summaryMapBox: { height: 200, borderRadius: 15, overflow: 'hidden', borderWidth: 1, borderColor: '#333', marginBottom: 20 },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 25 },
-  summaryStat: { flex: 1, backgroundColor: COLORS.card, padding: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
-  sStatValue: { color: COLORS.text, fontSize: 20, fontWeight: '900', marginTop: 8 },
-  sStatUnit: { fontSize: 12, color: COLORS.textDim, fontWeight: 'normal' },
-  sStatLabel: { color: COLORS.textDim, fontSize: 12, marginTop: 4 },
-  sectionTitle: { color: COLORS.textDim, fontSize: 14, fontWeight: 'bold', marginBottom: 10, letterSpacing: 1 },
-  maintenanceBox: { backgroundColor: COLORS.card, borderRadius: 12, padding: 15, borderWidth: 1, borderColor: '#333', marginBottom: 25 },
-  maintItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#333' },
-  maintText: { color: COLORS.text, flex: 1, marginLeft: 15, fontSize: 15 },
-  maintMinus: { color: COLORS.primary, fontWeight: 'bold' },
-  gamificationBox: { backgroundColor: 'rgba(74, 222, 128, 0.1)', borderRadius: 12, padding: 20, borderWidth: 1, borderColor: 'rgba(74, 222, 128, 0.3)', marginBottom: 40 },
-  summaryFooter: { padding: 20, borderTopWidth: 1, borderTopColor: '#333', backgroundColor: COLORS.bg },
-  closeSummaryBtn: { backgroundColor: COLORS.primary, padding: 18, borderRadius: 30, alignItems: 'center' },
-  
-  bikeSelectOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  bikeSelectBox: { backgroundColor: COLORS.card, borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 25, maxHeight: '80%', borderWidth: 1, borderColor: '#333' },
-  bikeSelectHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  bikeSelectTitle: { color: 'white', fontWeight: '900', fontSize: 18, letterSpacing: 1 },
-  bikeSelectSub: { color: COLORS.textDim, fontSize: 14, marginBottom: 20 },
-  bikeSelectItem: { backgroundColor: '#1A1A1A', padding: 15, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#333' },
-  bikeSelectName: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  bikeSelectDesc: { color: COLORS.textDim, fontSize: 12, marginTop: 4 }
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#222' },
+  modalTitle: { color: 'white', fontSize: 16, fontWeight: '900', letterSpacing: 2 },
+  importBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.primary, margin: 20, padding: 15, borderRadius: 15 },
+  importBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  songItem: { flexDirection: 'row', alignItems: 'center', gap: 15, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
+  activeSongItem: { borderBottomColor: COLORS.primary },
+  songName: { color: COLORS.textDim, fontSize: 14, flex: 1 },
+  activeSongName: { color: 'white', fontWeight: 'bold' },
+  emptyPlaylist: { color: COLORS.textDim, textAlign: 'center', marginTop: 40 },
+  summaryOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 25 },
+  summaryCard: { backgroundColor: COLORS.card, width: '100%', maxWidth: 400, padding: 30, borderRadius: 25, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  summaryTitle: { color: 'white', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 25 },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', gap: 15, marginBottom: 25 },
+  gridItem: { width: '47%', backgroundColor: '#0A0A0A', padding: 15, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#222' },
+  gridVal: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  gridLbl: { color: COLORS.textDim, fontSize: 10, marginTop: 4, textTransform: 'uppercase' },
+  badgesEarnedBox: { width: '100%', backgroundColor: 'rgba(227, 27, 35, 0.05)', borderWidth: 1, borderColor: 'rgba(227, 27, 35, 0.2)', padding: 15, borderRadius: 15, marginBottom: 25 },
+  badgesLabel: { color: COLORS.primary, fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
+  badgeTxt: { color: 'white', fontSize: 13, fontWeight: '600', marginVertical: 2 },
+  closeSummaryBtn: { width: '100%', backgroundColor: COLORS.primary, paddingVertical: 15, borderRadius: 25, alignItems: 'center' },
+  closeSummaryBtnTxt: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
+  bikeSelectOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  bikeSelectCard: { backgroundColor: COLORS.card, borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 25, maxHeight: height * 0.7 },
+  bikeSelectTitle: { color: 'white', fontSize: 16, fontWeight: '900', letterSpacing: 2, textAlign: 'center' },
+  bikeSelectSub: { color: COLORS.textDim, fontSize: 12, textAlign: 'center', marginTop: 5, marginBottom: 15 },
+  bikeSelectItem: { flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: '#0B0B0B', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#222' },
+  bikeSelectNick: { color: 'white', fontSize: 15, fontWeight: 'bold' },
+  bikeSelectInfo: { color: COLORS.textDim, fontSize: 12, marginTop: 2 },
+  cancelBikeSelectBtn: { width: '100%', backgroundColor: '#222', paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginTop: 10 },
+  cancelBikeSelectBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 }
 });

@@ -10,7 +10,6 @@ import { auth, db } from '../../firebaseConfig';
 import UserBadge from '../../components/UserBadge';
 import { recordUserStat } from '../../utils/badgeHelper';
 import { IPost, IComment } from '../../interfaces/post';
-import { useAppStore } from '../../store/useAppStore';
 
 const { height } = Dimensions.get('window');
 const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', textDarkDim: '#666666' };

@@ -12,7 +12,12 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "MotoTune cần quyền vị trí để ghi lại quãng đường và vẽ bản đồ hành trình.",
-        "NSLocationAlwaysUsageDescription": "Cho phép ứng dụng theo dõi GPS ngay cả khi chạy ngầm để không mất dữ liệu."
+        "NSLocationAlwaysUsageDescription": "Cho phép ứng dụng theo dõi GPS ngay cả khi chạy ngầm để không mất dữ liệu.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Cho phép ứng dụng theo dõi GPS bất cứ lúc nào để ghi lại quãng đường.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "android": {
