@@ -2,19 +2,20 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
-import { Flame, MessageCircle, MoreHorizontal, Plus, Send, Trash2, X } from 'lucide-react-native';
+import { Flame, MessageCircle, MoreHorizontal, Plus, Send, Trash2, X, Search } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
-// 🛑 IMPORT COMPONENT HUY HIỆU VÀ HÀM CỘNG ĐIỂM
 import UserBadge from '../../components/UserBadge';
 import { recordUserStat } from '../../utils/badgeHelper';
+import { IPost, IComment } from '../../interfaces/post';
+import { useAppStore } from '../../store/useAppStore';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', textDarkDim: '#666666' };
 
-const getRelativeTime = (timestamp: number) => {
+const getRelativeTime = (timestamp: number): string => {
   if (!timestamp) return '';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
   if (seconds < 60) return 'Vừa xong';
@@ -30,7 +31,13 @@ const PostVideo = ({ uri }: { uri: string }) => {
   return <View style={styles.mediaContainer}><VideoView player={player} style={styles.postMedia} contentFit="cover" /></View>;
 };
 
-const PostCard = ({ item, onComment, router }: { item: any, onComment: (post: any) => void, router: any }) => {
+interface IPostCardProps {
+  item: IPost;
+  onComment: (post: IPost) => void;
+  router: any;
+}
+
+const PostCard = ({ item, onComment, router }: IPostCardProps) => {
   const currentUser = auth.currentUser;
   const isLikedByMe = item.likedBy && currentUser ? item.likedBy.includes(currentUser.uid) : false;
   const isOwner = currentUser?.uid === item.authorId;
@@ -60,9 +67,9 @@ const PostCard = ({ item, onComment, router }: { item: any, onComment: (post: an
             });
             Alert.alert("Thành công", "Đã chia sẻ lên bảng tin!");
             
-            // 🛑 TÙY CHỌN: NẾU BẠN MUỐN SHARE CŨNG ĐƯỢC CỘNG ĐIỂM ĐĂNG BÀI THÌ GỌI Ở ĐÂY
-            await recordUserStat(currentUser.uid, 'post_creator', 1);
-
+            if (currentUser) {
+              await recordUserStat(currentUser.uid, 'post_creator', 1);
+            }
           } catch (e) { Alert.alert("Lỗi", "Không thể chia sẻ"); }
       }}
     ]);
@@ -100,7 +107,6 @@ const PostCard = ({ item, onComment, router }: { item: any, onComment: (post: an
         <TouchableOpacity style={styles.headerLeft} onPress={handleUserClick}>
           {item.authorAvatar ? <Image source={{ uri: item.authorAvatar }} style={styles.avatar} /> : <View style={[styles.avatar, {backgroundColor: '#333'}]} />}
           <View>
-             {/* 🛑 GẮN HUY HIỆU VÀO KẾ TÊN TÁC GIẢ Ở ĐÂY */}
              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                <Text style={styles.authorName}>{item.authorName}</Text>
                <UserBadge userId={item.authorId} size={14} />
@@ -153,27 +159,36 @@ const PostCard = ({ item, onComment, router }: { item: any, onComment: (post: an
 
 export default function ExploreScreen() {
   const router = useRouter();
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<IPost[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  const [activePostForComment, setActivePostForComment] = useState<any>(null);
-  const [comments, setComments] = useState<any[]>([]);
+  const [activePostForComment, setActivePostForComment] = useState<IPost | null>(null);
+  const [comments, setComments] = useState<IComment[]>([]);
   const [newComment, setNewComment] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as IPost)));
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribeUsers();
+  }, []);
+
+  useEffect(() => {
     if (!activePostForComment) return;
     const q = query(collection(db, 'posts', activePostForComment.id, 'comments'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as IComment)));
     });
     return () => unsubscribe();
   }, [activePostForComment]);
@@ -197,10 +212,60 @@ export default function ExploreScreen() {
         commentsCount: increment(1)
       });
 
-      // 🛑 THÊM TRIGGER: CỘNG ĐIỂM "ANH HÙNG BÀN PHÍM" VÌ ĐÃ COMMENT THÀNH CÔNG
       await recordUserStat(currentUser.uid, 'social_butterfly', 1);
 
     } catch (error) { Alert.alert("Lỗi", "Không thể gửi bình luận"); }
+  };
+
+  const filteredPosts = posts.filter(post => {
+    if (!searchQuery.trim()) return true;
+    const queryLower = searchQuery.toLowerCase();
+    const contentMatch = post.content?.toLowerCase().includes(queryLower);
+    const authorMatch = post.authorName?.toLowerCase().includes(queryLower);
+    return contentMatch || authorMatch;
+  });
+
+  const filteredUsers = users.filter(user => {
+    if (!searchQuery.trim()) return false;
+    const queryLower = searchQuery.toLowerCase();
+    const displayName = (user.displayName || user.name || user.email?.split('@')[0] || '').toLowerCase();
+    return displayName.includes(queryLower) && user.id !== auth.currentUser?.uid;
+  });
+
+  const renderBikersList = () => {
+    if (!searchQuery.trim() || filteredUsers.length === 0) return null;
+
+    return (
+      <View style={styles.matchingBikersSection}>
+        <Text style={styles.sectionTitle}>BIKERS TÌM THẤY ({filteredUsers.length})</Text>
+        <FlatList 
+          horizontal
+          data={filteredUsers}
+          keyExtractor={item => item.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 12, paddingVertical: 10 }}
+          renderItem={({ item }) => {
+            const name = item.displayName || item.name || item.email?.split('@')[0] || 'Biker';
+            const avatar = item.avatarUrl || item.photoURL;
+
+            const handleBikerClick = () => {
+              router.push(`/user/${item.id}?name=${name}&avatar=${encodeURIComponent(avatar || '')}` as any);
+            };
+
+            return (
+              <TouchableOpacity style={styles.bikerCard} onPress={handleBikerClick}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={styles.bikerAvatar} />
+                ) : (
+                  <View style={[styles.bikerAvatar, { backgroundColor: '#333' }]} />
+                )}
+                <Text style={styles.bikerName} numberOfLines={1}>{name}</Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+    );
   };
 
   return (
@@ -214,12 +279,34 @@ export default function ExploreScreen() {
             <TouchableOpacity onPress={() => router.push('/inbox' as any)}><MessageCircle size={28} color={COLORS.text} /></TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.searchBarContainer}>
+          <View style={styles.searchInner}>
+            <Search size={18} color={COLORS.textDim} style={styles.searchIcon} />
+            <TextInput 
+              style={styles.searchInput}
+              placeholder="Tìm kiếm bài viết hoặc biker..."
+              placeholderTextColor={COLORS.textDim}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+                <X size={16} color={COLORS.textDim} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       </View>
 
       {loading ? <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 100 }} /> : (
         <FlatList
-          data={posts} keyExtractor={(item) => item.id}
+          data={filteredPosts} 
+          keyExtractor={(item) => item.id}
           renderItem={({ item }) => (<PostCard item={item} onComment={(post) => setActivePostForComment(post)} router={router} />)}
+          ListHeaderComponent={renderBikersList}
           contentContainerStyle={{ paddingBottom: 20, maxWidth: 600, width: '100%', alignSelf: 'center' }}
           showsVerticalScrollIndicator={false}
         />
@@ -251,7 +338,6 @@ export default function ExploreScreen() {
                   <View style={styles.commentRow}>
                     {item.authorAvatar ? <Image source={{uri: item.authorAvatar}} style={styles.commentAvatar} /> : <View style={[styles.commentAvatar, {backgroundColor: '#333'}]} />}
                     <View style={styles.commentContent}>
-                      {/* 🛑 GẮN HUY HIỆU VÀO TÊN NGƯỜI BÌNH LUẬN TRONG BOTTOM SHEET */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
                         <Text style={styles.commentAuthor}>{item.authorName} </Text>
                         <UserBadge userId={item.authorId} size={10} />
@@ -287,9 +373,19 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  appHeaderWrapper: { width: '100%', borderBottomWidth: 1, borderBottomColor: '#222' },
+  appHeaderWrapper: { width: '100%', borderBottomWidth: 1, borderBottomColor: '#222', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 25) : 0, backgroundColor: COLORS.bg },
   appHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, maxWidth: 600, width: '100%', alignSelf: 'center' },
   headerLogo: { color: COLORS.text, fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
+  searchBarContainer: { paddingHorizontal: 15, paddingBottom: 12, maxWidth: 600, width: '100%', alignSelf: 'center' },
+  searchInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 20, paddingHorizontal: 12, height: 40, borderWidth: 1, borderColor: '#333' },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, color: 'white', fontSize: 14, padding: 0 },
+  clearBtn: { padding: 4 },
+  matchingBikersSection: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#222', backgroundColor: '#0A0A0A' },
+  sectionTitle: { color: COLORS.primary, fontWeight: 'bold', fontSize: 11, letterSpacing: 1, marginBottom: 8 },
+  bikerCard: { alignItems: 'center', width: 70, marginRight: 8 },
+  bikerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: '#333', marginBottom: 6 },
+  bikerName: { color: 'white', fontSize: 11, fontWeight: '600', textAlign: 'center', width: '100%' },
   postContainer: { backgroundColor: COLORS.bg, marginBottom: 15, borderWidth: Platform.OS === 'web' ? 1 : 0, borderColor: '#222', borderRadius: Platform.OS === 'web' ? 8 : 0, overflow: 'hidden', marginTop: Platform.OS === 'web' ? 20 : 0 },
   postHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },

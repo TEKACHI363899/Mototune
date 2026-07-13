@@ -4,14 +4,14 @@ import * as Location from 'expo-location';
 import { Accelerometer } from 'expo-sensors';
 import * as SMS from 'expo-sms';
 import * as Speech from 'expo-speech';
-import { onAuthStateChanged } from 'firebase/auth';
-import { addDoc, arrayUnion, collection, doc, getDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDoc, increment, setDoc } from 'firebase/firestore';
 import { AlertTriangle, CheckCircle, Clock, Droplet, Gauge, ListMusic, MapPin, Music, Pause, Play, PlusCircle, Settings, ShieldCheck, SkipBack, SkipForward, Smartphone, Square, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Dimensions, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Map from '../../components/Map';
-import { auth, db } from '../../firebaseConfig';
+import { db } from '../../firebaseConfig';
 import { IBike } from '../../interfaces/bike';
+import { useAppStore } from '../../store/useAppStore';
 
 // 🛑 IMPORT HÀM CỘNG ĐIỂM HUY HIỆU
 import { recordUserStat } from '../../utils/badgeHelper';
@@ -29,7 +29,9 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 type LocalSong = { uri: string; name: string };
 
 export default function JourneyScreen() {
-  const [currentUser, setCurrentUser] = useState<any>(auth.currentUser);
+  const currentUser = useAppStore(state => state.currentUser);
+  const bikes = useAppStore(state => state.bikes);
+  
   const [isTracking, setIsTracking] = useState(false);
   const [routeCoords, setRouteCoords] = useState<{latitude: number, longitude: number}[]>([]);
   const [currentSpeed, setCurrentSpeed] = useState(0);
@@ -48,7 +50,6 @@ export default function JourneyScreen() {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
 
   // Multiple bikes states
-  const [bikes, setBikes] = useState<IBike[]>([]);
   const [selectedBikeId, setSelectedBikeId] = useState<string | null>(null);
   const [showBikeSelectModal, setShowBikeSelectModal] = useState(false);
 
@@ -59,32 +60,9 @@ export default function JourneyScreen() {
   const hudTimeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    let unsubscribeDoc: (() => void) | null = null;
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (user) {
-        unsubscribeDoc = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            let userBikes = data.bikes as IBike[] || [];
-            // Migrate legacy single bike to array if needed
-            if (userBikes.length === 0 && data.bike) {
-              userBikes = [{ id: 'default', ...data.bike }];
-            }
-            setBikes(userBikes);
-          }
-        });
-      } else {
-        setBikes([]);
-        if (unsubscribeDoc) unsubscribeDoc();
-      }
-    });
-
     return () => { 
       stopJourney(); 
       if (soundRef.current) { soundRef.current.unloadAsync(); }
-      unsubscribeAuth();
-      if (unsubscribeDoc) unsubscribeDoc();
     };
   }, []);
 
@@ -176,11 +154,13 @@ export default function JourneyScreen() {
     } catch (e) { console.log(e); }
 
     // 🛑 TRIGGER 1: KIỂM TRA THỜI GIAN ĐỂ CỘNG ĐIỂM CÚ ĐÊM / BÌNH MINH
-    const currentHour = new Date().getHours();
-    if (currentHour >= 23 || currentHour < 4) {
-      await recordUserStat(currentUser.uid, 'night_rider', 1);
-    } else if (currentHour >= 4 && currentHour <= 6) {
-      await recordUserStat(currentUser.uid, 'early_bird', 1);
+    if (currentUser) {
+      const currentHour = new Date().getHours();
+      if (currentHour >= 23 || currentHour < 4) {
+        await recordUserStat(currentUser.uid, 'night_rider', 1);
+      } else if (currentHour >= 4 && currentHour <= 6) {
+        await recordUserStat(currentUser.uid, 'early_bird', 1);
+      }
     }
 
     setIsTracking(true);

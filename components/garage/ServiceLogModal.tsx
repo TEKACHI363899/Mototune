@@ -2,20 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, Modal, SafeAreaView, FlatList, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { BookOpen, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { IServiceLog } from '../../interfaces/serviceLog';
-import { IBike } from '../../interfaces/bike';
 import { fetchServiceLogs, addServiceLog, deleteServiceLog } from '../../services/bikeService';
 import { recordUserStat } from '../../utils/badgeHelper';
 import { COLORS } from '../../constants/colors';
+import { useAppStore } from '../../store/useAppStore';
 
 interface IServiceLogModalProps {
   visible: boolean;
   uid: string;
-  bikes: IBike[];
-  activeBikeIndex: number;
   onClose: () => void;
 }
 
-export default function ServiceLogModal({ visible, uid, bikes, activeBikeIndex, onClose }: IServiceLogModalProps) {
+export default function ServiceLogModal({ visible, uid, onClose }: IServiceLogModalProps) {
+  const bikes = useAppStore(state => state.bikes);
+  const activeBikeIndex = useAppStore(state => state.activeBikeIndex);
+
   const [logs, setLogs] = useState<IServiceLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [part, setPart] = useState<string>('');

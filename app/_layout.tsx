@@ -1,16 +1,15 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { onAuthStateChanged } from 'firebase/auth';
 import { Bike } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
-import { auth } from '../firebaseConfig';
+import { useAppStore } from '../store/useAppStore';
 
 const { width } = Dimensions.get('window');
 
 export default function RootLayout() {
-  // Trạng thái hệ thống ngầm
-  const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const initAuthListener = useAppStore(state => state.initAuthListener);
+  const user = useAppStore(state => state.currentUser);
+  const initializing = useAppStore(state => state.loading);
   
   // Trạng thái màn hình chờ (Splash Screen)
   const [appReady, setAppReady] = useState(false);
@@ -20,14 +19,11 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  // 1. Lắng nghe Firebase Auth
+  // 1. Lắng nghe Firebase Auth và nạp dữ liệu từ Zustand Store toàn cục
   useEffect(() => {
-    const subscriber = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setInitializing(false);
-    });
-    return subscriber;
-  }, []);
+    const unsubscribe = initAuthListener();
+    return unsubscribe;
+  }, [initAuthListener]);
 
   // 2. Chạy thanh tiến trình giả lập (Khoảng 1.5 giây để hiển thị đủ thông báo)
   useEffect(() => {

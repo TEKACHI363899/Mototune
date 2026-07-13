@@ -32,6 +32,19 @@ const Bike3d = ({ modelName }: { modelName: string }) => {
 
   const modelSource = ModelRegistry[modelName];
 
+  React.useEffect(() => {
+    return () => {
+      // Giải phóng bộ nhớ RAM/VRAM của mô hình 3D khi component bị huỷ (unmount)
+      if (modelSource) {
+        try {
+          useGLTF.clear(modelSource);
+        } catch (e) {
+          console.log("Error clearing 3D model cache:", e);
+        }
+      }
+    };
+  }, [modelSource]);
+
   if (!modelSource) return <ComingSoonFallback modelName={modelName} />;
 
   // 🛑 LƯỚI BẢO VỆ: Nếu người dùng sang trang khác -> Hiển thị hộp đen, ngắt điện 3D

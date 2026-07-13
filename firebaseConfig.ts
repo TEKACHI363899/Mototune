@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
 const firebaseConfig = {
@@ -15,7 +15,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// Kích hoạt bộ nhớ đệm lưu trữ ngoại tuyến (Offline Persistence Cache)
+// Hỗ trợ lưu trữ cục bộ trên cả Web (IndexedDB) và Native (SQLite/AsyncStorage)
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: Platform.OS === 'web' ? persistentMultipleTabManager() : undefined
+  })
+});
 
 let auth: any;
 

@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 import { uploadToCloudinary } from '../../services/cloudinaryService';
+import { IProduct, IOrder, IMediaAsset } from '../../interfaces/marketplace';
 
 const { width, height } = Dimensions.get('window');
 const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', safe: '#4ADE80', warning: '#F59E0B', info: '#3B82F6' };
@@ -15,15 +16,13 @@ const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFF
 
 const CATEGORIES = ["Phụ tùng", "Xe cộ", "Bảo hộ", "Khác"];
 
-type MediaAsset = { uri: string; type: 'image' | 'video' };
-
 export default function MarketplaceScreen() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
   const [activeTab, setActiveTab] = useState<'market' | 'orders'>('market');
   
-  const [products, setProducts] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [products, setProducts] = useState<IProduct[]>([]);
+  const [orders, setOrders] = useState<IOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [filterCat, setFilterCat] = useState('Tất cả');
@@ -31,13 +30,13 @@ export default function MarketplaceScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [newProduct, setNewProduct] = useState({ title: '', price: '', desc: '', category: 'Phụ tùng', assets: [] as MediaAsset[] });
+  const [newProduct, setNewProduct] = useState({ title: '', price: '', desc: '', category: 'Phụ tùng', assets: [] as IMediaAsset[] });
 
-  const [viewProduct, setViewProduct] = useState<any>(null);
+  const [viewProduct, setViewProduct] = useState<IProduct | null>(null);
   const [currentMediaIdx, setCurrentMediaIdx] = useState(0);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] = useState<IOrder | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
@@ -47,7 +46,7 @@ export default function MarketplaceScreen() {
       if (user && !user.isAnonymous) {
         if (unsubscribeOrders) unsubscribeOrders();
         unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
-          const allOrders: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as IOrder));
           const myOrders = allOrders.filter(o => o.buyerId === user.uid || o.sellerId === user.uid).sort((a, b) => b.createdAt - a.createdAt);
           setOrders(myOrders);
         });
@@ -61,7 +60,7 @@ export default function MarketplaceScreen() {
     });
     const q = query(collection(db, 'marketplace'), where('status', '==', 'available'), orderBy('createdAt', 'desc'));
     const unsubscribeMarket = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as IProduct)));
       setLoading(false);
     });
     return () => { 
@@ -118,7 +117,7 @@ export default function MarketplaceScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.All, allowsMultipleSelection: true, selectionLimit: 5, quality: 0.8,
     });
     if (!result.canceled && result.assets) {
-      const newAssets: MediaAsset[] = result.assets.map(asset => ({ uri: asset.uri, type: asset.type === 'video' ? 'video' : 'image' }));
+      const newAssets: IMediaAsset[] = result.assets.map(asset => ({ uri: asset.uri, type: asset.type === 'video' ? 'video' : 'image' }));
       setNewProduct(prev => ({ ...prev, assets: [...prev.assets, ...newAssets].slice(0, 5) })); 
     }
   };
@@ -200,6 +199,7 @@ export default function MarketplaceScreen() {
   };
 
   const simulatePayment = async () => { 
+    if (!selectedOrder) return;
     setIsProcessingPayment(true);
     setTimeout(async () => {
       try { await updateDoc(doc(db, 'orders', selectedOrder.id), { status: 'paid', paidAt: Date.now() });
@@ -211,7 +211,7 @@ export default function MarketplaceScreen() {
     try { await updateDoc(doc(db, 'orders', orderId), { status: newStatus }); } catch (error) { Alert.alert("Lỗi", "Cập nhật thất bại."); }
   };
 
-  const renderProductItem = ({ item }: { item: any }) => {
+  const renderProductItem = ({ item }: { item: IProduct }) => {
     const isOwner = currentUser?.uid === item.authorId;
     const mediaCount = item.mediaUrls?.length || 1;
     const postDate = new Date(item.createdAt).toLocaleDateString('vi-VN');

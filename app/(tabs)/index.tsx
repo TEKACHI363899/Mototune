@@ -1,13 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, SafeAreaView, View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Image, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Bot, User, Map, BookOpen, PlusCircle } from 'lucide-react-native';
 
-import { auth, db } from '../../firebaseConfig';
+import { useAppStore } from '../../store/useAppStore';
+import { deleteBike } from '../../services/bikeService';
 import { IBike } from '../../interfaces/bike';
-import { updateBike, deleteBike } from '../../services/bikeService';
 
 // Central Constants
 import { COLORS } from '../../constants/colors';
@@ -23,10 +21,15 @@ import BikeEditor from '../../components/garage/BikeEditor';
 
 export default function GarageScreen() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
-  const [bikes, setBikes] = useState<IBike[]>([]);
-  const [activeBikeIndex, setActiveBikeIndex] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
+
+  // Zustand Store
+  const currentUser = useAppStore(state => state.currentUser);
+  const bikes = useAppStore(state => state.bikes);
+  const activeBikeIndex = useAppStore(state => state.activeBikeIndex);
+  const loading = useAppStore(state => state.loading);
+  const setActiveBikeIndex = useAppStore(state => state.setActiveBikeIndex);
+  const updateBikeInStore = useAppStore(state => state.updateBikeInStore);
+
   const [garageStep, setGarageStep] = useState<number>(0); // 0: Normal/Empty, 1: Adding/Editing Bike
   const [bikeToEdit, setBikeToEdit] = useState<IBike | null>(null); // State to store which bike to edit
 
@@ -37,61 +40,11 @@ export default function GarageScreen() {
   // Computes active bike object dynamically from state
   const bikeObj = bikes[activeBikeIndex] || null;
 
-  useEffect(() => {
-    let unsubscribeDoc: (() => void) | null = null;
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (user) {
-        unsubscribeDoc = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            let userBikes = data.bikes as IBike[] || [];
-            let activeIdx = data.activeBikeIndex ?? 0;
-
-            // Self-healing migration path for single legacy bike users
-            if (userBikes.length === 0 && data.bike) {
-              const legacyBike = { id: 'default', ...data.bike };
-              userBikes = [legacyBike];
-              activeIdx = 0;
-              // Save migrated bikes array back to Firestore
-              setDoc(doc(db, 'users', user.uid), { 
-                bikes: userBikes, 
-                activeBikeIndex: activeIdx 
-              }, { merge: true });
-            }
-
-            setBikes(userBikes);
-            setActiveBikeIndex(activeIdx);
-          } else {
-            setBikes([]);
-            setActiveBikeIndex(0);
-          }
-          setLoading(false);
-        });
-      } else {
-        setBikes([]);
-        setActiveBikeIndex(0);
-        setGarageStep(0);
-        setLoading(false);
-        if (unsubscribeDoc) unsubscribeDoc();
-      }
-    });
-
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeDoc) unsubscribeDoc();
-    };
-  }, []);
-
   const handleSwitchBike = async (index: number) => {
-    setActiveBikeIndex(index);
-    if (currentUser && bikes[index]) {
-      // Save chosen active index to database
-      await setDoc(doc(db, 'users', currentUser.uid), { 
-        activeBikeIndex: index,
-        // Also keep legacy single bike field synced so other screens function normally
-        bike: bikes[index] 
-      }, { merge: true });
+    try {
+      await setActiveBikeIndex(index);
+    } catch (error) {
+      console.error("Error switching bike:", error);
     }
   };
 
@@ -108,7 +61,6 @@ export default function GarageScreen() {
   const handleDeleteBike = async (bikeId: string) => {
     const executeDelete = async () => {
       try {
-        setLoading(true);
         await deleteBike(currentUser!.uid, bikeId);
         if (Platform.OS === 'web') {
           window.alert("Đã xóa xe khỏi Garage.");
@@ -122,8 +74,6 @@ export default function GarageScreen() {
         } else {
           Alert.alert("Lỗi", "Không thể xóa xe lúc này.");
         }
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -151,7 +101,7 @@ export default function GarageScreen() {
   const handleOdoUpdated = async (newOdo: number) => {
     if (bikeObj && currentUser) {
       try {
-        await updateBike(currentUser.uid, { ...bikeObj, odo: newOdo });
+        await updateBikeInStore({ ...bikeObj, odo: newOdo });
       } catch (error) {
         console.error("Failed to update ODO:", error);
       }
@@ -161,7 +111,7 @@ export default function GarageScreen() {
   const handleQuickLogSuccess = async (updatedBike: IBike) => {
     if (currentUser) {
       try {
-        await updateBike(currentUser.uid, updatedBike);
+        await updateBikeInStore(updatedBike);
       } catch (error) {
         console.error("Failed to update bike after quick log:", error);
       }
@@ -172,7 +122,7 @@ export default function GarageScreen() {
   const handleBikeUpdated = async (updatedBike: IBike) => {
     if (currentUser) {
       try {
-        await updateBike(currentUser.uid, updatedBike);
+        await updateBikeInStore(updatedBike);
       } catch (error) {
         console.error("Failed to update bike:", error);
       }
@@ -206,7 +156,11 @@ export default function GarageScreen() {
                 style={[styles.bikeTab, index === activeBikeIndex && styles.activeBikeTab]}
                 onPress={() => handleSwitchBike(index)}
               >
-                <Text style={[styles.bikeTabText, index === activeBikeIndex && styles.activeBikeTabText]}>
+                <Text 
+                  style={[styles.bikeTabText, index === activeBikeIndex && styles.activeBikeTabText]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
                   {b.nickname}
                 </Text>
               </TouchableOpacity>
@@ -232,8 +186,6 @@ export default function GarageScreen() {
           <ServiceLogModal 
             visible={showLogbook} 
             uid={currentUser.uid} 
-            bikes={bikes}
-            activeBikeIndex={activeBikeIndex}
             onClose={() => setShowLogbook(false)} 
           />
         </>
