@@ -1,8 +1,17 @@
 import React from 'react';
 import MapView, { Polyline, UrlTile } from 'react-native-maps';
+import { COLORS as APP_COLORS } from '../constants/colors';
 
 // Trình biên dịch của iOS/Android sẽ tự động gọi file này
-export default function Map({ routeCoords, COLORS }: any) {
+interface IMapProps {
+  routeCoords: { latitude: number; longitude: number }[];
+  COLORS?: {
+    primary: string;
+    [key: string]: string;
+  };
+}
+
+export default function Map({ routeCoords, COLORS = APP_COLORS }: IMapProps) {
   if (!routeCoords || routeCoords.length === 0) return null;
 
   return (
@@ -21,7 +30,7 @@ export default function Map({ routeCoords, COLORS }: any) {
         maximumZ={19}
         flipY={false}
       />
-      <Polyline coordinates={routeCoords} strokeColor={COLORS.primary} strokeWidth={5} />
+      <Polyline coordinates={routeCoords} strokeColor={COLORS?.primary || '#E31B23'} strokeWidth={5} />
     </MapView>
   );
 }
