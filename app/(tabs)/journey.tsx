@@ -765,6 +765,40 @@ export default function JourneyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* YouTube Player (Hidden but Globally Mounted to bypass async click restrictions) */}
+      {playlist.length > 0 && isYoutubeTrack(playlist[currentSongIndex]?.uri) && (
+        <View style={{ position: 'absolute', top: 0, left: 0, width: 320, height: 240, zIndex: -10 }} pointerEvents="none">
+          <YoutubePlayer
+            ref={ytPlayerRef}
+            height={240}
+            width={320}
+            play={isPlaying && ytReady}
+            videoId={playlist[currentSongIndex].uri}
+            onChangeState={onYtPlayerStateChange}
+            onReady={() => {
+              console.log("[YouTube Player] Ready for video:", playlist[currentSongIndex]?.uri);
+              setYtReady(true);
+            }}
+            onError={(e: any) => {
+              console.warn("[YouTube Player Error]:", e);
+              Alert.alert("Lỗi phát YouTube", `Mã lỗi: ${e}. Một số MV ca nhạc gốc bị YouTube chặn phát trên App ngoài.`);
+            }}
+            volume={100}
+            initialPlayerParams={{
+              preventFullScreen: true,
+              autoplay: true
+            }}
+            webViewProps={{
+              mediaPlaybackRequiresUserAction: false,
+              allowsInlineMediaPlayback: true,
+              androidLayerType: 'hardware',
+              mixedContentMode: 'always'
+            }}
+          />
+          {/* Opaque masking view to hide the player while keeping opacity=1 for OS viewport checks */}
+          <View style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: COLORS.bg }} />
+        </View>
+      )}
       
       {crashDetected && (
         <View style={styles.crashOverlay}>
@@ -1061,37 +1095,6 @@ export default function JourneyScreen() {
           scrollEnabled={scrollEnabled}
           showsVerticalScrollIndicator={false}
         >
-          {/* YouTube Player (Hidden) */}
-          {playlist.length > 0 && isYoutubeTrack(playlist[currentSongIndex]?.uri) && (
-            <View style={{ position: 'absolute', top: 0, left: 0, width: 320, height: 240, zIndex: -10 }} pointerEvents="none">
-              <YoutubePlayer
-                ref={ytPlayerRef}
-                height={240}
-                width={320}
-                play={isPlaying && ytReady}
-                videoId={playlist[currentSongIndex].uri}
-                onChangeState={onYtPlayerStateChange}
-                onReady={() => {
-                  console.log("[YouTube Player] Ready for video:", playlist[currentSongIndex]?.uri);
-                  setYtReady(true);
-                }}
-                onError={(e: any) => {
-                  console.warn("[YouTube Player Error]:", e);
-                  Alert.alert("Lỗi phát YouTube", `Mã lỗi: ${e}. Một số MV ca nhạc gốc bị YouTube chặn phát trên App ngoài, hãy thử tìm các bản Remix hoặc Lyrics.`);
-                }}
-                initialPlayerParams={{
-                  preventFullScreen: true,
-                  controls: false
-                }}
-                webViewProps={{
-                  mediaPlaybackRequiresUserAction: false,
-                  allowsInlineMediaPlayback: true,
-                }}
-              />
-              {/* Opaque masking view to hide the player while keeping opacity=1 for OS viewport checks */}
-              <View style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: COLORS.bg }} />
-            </View>
-          )}
 
           {/* Map Section */}
           <View style={[styles.mapContainer, { height: mapHeight }]}>
