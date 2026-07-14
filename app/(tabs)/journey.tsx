@@ -10,7 +10,6 @@ import { AlertTriangle, CheckCircle, Clock, Droplet, Gauge, ListMusic, MapPin, M
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Dimensions, FlatList, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, DeviceEventEmitter, PanResponder, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import Map from '../../components/Map';
-import YoutubePlayer from 'react-native-youtube-iframe';
 import { db } from '../../firebaseConfig';
 import { IBike } from '../../interfaces/bike';
 import { useAppStore } from '../../store/useAppStore';
@@ -110,13 +109,9 @@ export default function JourneyScreen() {
   // Music playback progress states
   const [playbackPosition, setPlaybackPosition] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
-  const [ytReady, setYtReady] = useState(false);
-
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const accelSubscription = useRef<any>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
-  const ytPlayerRef = useRef<any>(null);
-  const ytProgressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const hudTimeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -174,6 +169,14 @@ export default function JourneyScreen() {
   }, [currentUser]);
 
   useEffect(() => {
+    // Configure audio for background playback when screen is off or in silent mode
+    Audio.setAudioModeAsync({
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false
+    });
+
     return () => { 
       stopJourney(); 
       if (soundRef.current) { soundRef.current.unloadAsync(); }
@@ -375,34 +378,12 @@ export default function JourneyScreen() {
     return uri && !uri.startsWith('http') && !uri.startsWith('file') && !uri.startsWith('content') && uri.length <= 15;
   };
 
-  const startYtProgressPolling = () => {
-    if (ytProgressInterval.current) clearInterval(ytProgressInterval.current);
-    ytProgressInterval.current = setInterval(async () => {
-      if (ytPlayerRef.current) {
-        try {
-          const currentTimeSec = await ytPlayerRef.current.getCurrentTime();
-          const durationSec = await ytPlayerRef.current.getDuration();
-          setPlaybackPosition(currentTimeSec * 1000);
-          setPlaybackDuration(durationSec * 1000);
-        } catch (e) {}
-      }
-    }, 1000);
-  };
-
-  const stopYtProgressPolling = () => {
-    if (ytProgressInterval.current) {
-      clearInterval(ytProgressInterval.current);
-      ytProgressInterval.current = null;
-    }
-  };
-
   const playMusic = async (index: number, customPlaylist?: LocalSong[]) => {
     const activePlaylist = customPlaylist || playlist;
     if (activePlaylist.length === 0) return;
     
     setPlaybackPosition(0);
     setPlaybackDuration(0);
-    stopYtProgressPolling();
 
     if (soundRef.current) {
       try {
@@ -433,45 +414,47 @@ export default function JourneyScreen() {
       }
     }
 
-    if (isYoutubeTrack(track.uri)) {
-      setIsPlaying(true);
-      startYtProgressPolling();
-    } else {
-      try {
-        const { sound } = await Audio.Sound.createAsync({ uri: track.uri });
-        soundRef.current = sound;
-        await soundRef.current.playAsync();
-        setIsPlaying(true);
-        
-        soundRef.current.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded) {
-            setPlaybackPosition(status.positionMillis || 0);
-            setPlaybackDuration(status.durationMillis || 0);
-            if (status.didJustFinish) {
-              nextSong();
-            }
-          }
-        });
-      } catch (error) { 
-        Alert.alert('Lỗi phát nhạc', 'File nhạc có thể bị hỏng hoặc không hỗ trợ stream trực tuyến.'); 
+    try {
+      let finalUri = track.uri;
+      if (isYoutubeTrack(track.uri)) {
+        finalUri = `${BACKEND_URL}/api/spotify/stream/${track.uri}`;
+        console.log(`[Audio Stream] Proxying YouTube track: ${finalUri}`);
       }
+      
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: finalUri },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+      setIsPlaying(true);
+      
+      soundRef.current.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded) {
+          setPlaybackPosition(status.positionMillis || 0);
+          setPlaybackDuration(status.durationMillis || 0);
+          if (status.didJustFinish) {
+            nextSong();
+          }
+        } else if (status.error) {
+          console.error(`[Audio Stream Error]: ${status.error}`);
+          Alert.alert('Lỗi phát nhạc', 'Lỗi khi tải luồng âm thanh từ Backend.');
+        }
+      });
+    } catch (error) { 
+      Alert.alert('Lỗi phát nhạc', 'File nhạc có thể bị hỏng hoặc máy chủ xử lý lỗi bản quyền.'); 
     }
   };
 
   const togglePlayPause = async () => {
     if (playlist.length === 0) return;
-    const track = playlist[currentSongIndex];
-    if (isYoutubeTrack(track.uri)) {
-      setIsPlaying(!isPlaying);
-      if (!isPlaying) {
-        startYtProgressPolling();
-      } else {
-        stopYtProgressPolling();
-      }
-    } else {
-      if (!soundRef.current) { playMusic(currentSongIndex); return; }
-      if (isPlaying) { await soundRef.current.pauseAsync(); setIsPlaying(false); } 
-      else { await soundRef.current.playAsync(); setIsPlaying(true); }
+    if (!soundRef.current) { playMusic(currentSongIndex); return; }
+    
+    if (isPlaying) { 
+      await soundRef.current.pauseAsync(); 
+      setIsPlaying(false); 
+    } else { 
+      await soundRef.current.playAsync(); 
+      setIsPlaying(true); 
     }
   };
 
@@ -485,20 +468,8 @@ export default function JourneyScreen() {
       } catch (e) {}
     } 
     setIsPlaying(false); 
-    stopYtProgressPolling();
     setPlaybackPosition(0);
     setPlaybackDuration(0);
-  };
-
-  const onYtPlayerStateChange = (state: string) => {
-    console.log("[YouTube Player State Changed]:", state);
-    if (state === "ended") {
-      nextSong();
-    } else if (state === "playing") {
-      startYtProgressPolling();
-    } else if (state === "paused") {
-      stopYtProgressPolling();
-    }
   };
 
   // --- Journey Lifecycle Functions ---
@@ -765,40 +736,6 @@ export default function JourneyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* YouTube Player (Hidden but Globally Mounted to bypass async click restrictions) */}
-      {playlist.length > 0 && isYoutubeTrack(playlist[currentSongIndex]?.uri) && (
-        <View style={{ position: 'absolute', top: 0, left: 0, width: 320, height: 240, zIndex: -10 }} pointerEvents="none">
-          <YoutubePlayer
-            ref={ytPlayerRef}
-            height={240}
-            width={320}
-            play={isPlaying && ytReady}
-            videoId={playlist[currentSongIndex].uri}
-            onChangeState={onYtPlayerStateChange}
-            onReady={() => {
-              console.log("[YouTube Player] Ready for video:", playlist[currentSongIndex]?.uri);
-              setYtReady(true);
-            }}
-            onError={(e: any) => {
-              console.warn("[YouTube Player Error]:", e);
-              Alert.alert("Lỗi phát YouTube", `Mã lỗi: ${e}. Một số MV ca nhạc gốc bị YouTube chặn phát trên App ngoài.`);
-            }}
-            volume={100}
-            initialPlayerParams={{
-              preventFullScreen: true,
-              autoplay: true
-            }}
-            webViewProps={{
-              mediaPlaybackRequiresUserAction: false,
-              allowsInlineMediaPlayback: true,
-              androidLayerType: 'hardware',
-              mixedContentMode: 'always'
-            }}
-          />
-          {/* Opaque masking view to hide the player while keeping opacity=1 for OS viewport checks */}
-          <View style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: COLORS.bg }} />
-        </View>
-      )}
       
       {crashDetected && (
         <View style={styles.crashOverlay}>
