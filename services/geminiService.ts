@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://mototune-backend.onrender.com';
 
 /**
  * Uses Gemini API (via Backend Proxy) to extract ODO mileage from an image base64 string (OCR)
