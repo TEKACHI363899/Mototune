@@ -5,7 +5,9 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
-const COLORS = { bg: '#121212', card: '#1E1E1E', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0' };
+import { HIGTheme } from '../../constants/theme';
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel };
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();

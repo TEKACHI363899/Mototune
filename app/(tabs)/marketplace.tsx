@@ -10,8 +10,11 @@ import { auth, db } from '../../firebaseConfig';
 import { uploadToCloudinary } from '../../services/cloudinaryService';
 import { IProduct, IOrder, IMediaAsset } from '../../interfaces/marketplace';
 
+import { HIGTheme } from '../../constants/theme';
+
 const { width, height } = Dimensions.get('window');
-const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', safe: '#4ADE80', warning: '#F59E0B', info: '#3B82F6' };
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel, safe: themeColors.systemGreen, warning: '#F59E0B', info: themeColors.systemBlue };
 // Cloudinary config loaded from env via cloudinaryService
 
 const CATEGORIES = ["Phụ tùng", "Xe cộ", "Bảo hộ", "Khác"];

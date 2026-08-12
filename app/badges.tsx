@@ -6,8 +6,10 @@ import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { BADGE_RULES, BADGE_TIERS_COLORS, calculateBadgeTier } from '../utils/badgeConfig';
+import { HIGTheme } from '../constants/theme';
 
-const TIER_NAMES = ['Đồng 🥉', 'Bạc 🥈', 'Vàng 🥇', 'Bạch Kim 💎', 'Kim Cương 👑'];
+const themeColors = HIGTheme.dark;
+const TIER_NAMES = ['Đồng', 'Bạc', 'Vàng', 'Bạch Kim', 'Kim Cương'];
 const TIER_KEYS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
 
 export default function BadgesScreen() {
@@ -234,7 +236,7 @@ export default function BadgesScreen() {
   );
 }
 
-const COLORS = { success: '#4ADE80', textDim: '#A0A0A0', bg: '#000', card: '#111' };
+const COLORS = { success: themeColors.systemGreen, textDim: themeColors.secondaryLabel, bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },

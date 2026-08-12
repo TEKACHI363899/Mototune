@@ -11,8 +11,11 @@ import UserBadge from '../../components/UserBadge';
 import { recordUserStat } from '../../utils/badgeHelper';
 import { IPost, IComment } from '../../interfaces/post';
 
+import { HIGTheme } from '../../constants/theme';
+
 const { height } = Dimensions.get('window');
-const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0', textDarkDim: '#666666' };
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel, textDarkDim: '#666666' };
 
 const getRelativeTime = (timestamp: number): string => {
   if (!timestamp) return '';

@@ -1,4 +1,5 @@
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://mototune-backend.onrender.com';
+const API_KEY = process.env.EXPO_PUBLIC_MOTO_TUNE_API_KEY || '';
 
 /**
  * Uses Gemini API (via Backend Proxy) to extract ODO mileage from an image base64 string (OCR)
@@ -9,7 +10,7 @@ export const scanOdoWithGemini = async (base64Image: string): Promise<string> =>
   const url = `${BACKEND_URL}/api/gemini/scan-odo`;
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
     body: JSON.stringify({ base64Image })
   });
 
@@ -45,7 +46,7 @@ export const fetchAITextResponse = async (
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
     body: JSON.stringify({
       messages: chatHistory,
       userMessage,
@@ -87,7 +88,7 @@ export const fetchAIVideoResponse = async (
     body: formData,
     headers: {
       // Content-Type is set automatically by React Native when FormData is used
-      Accept: 'application/json'
+      Accept: 'application/json', 'x-api-key': API_KEY
     }
   });
 

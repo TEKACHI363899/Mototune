@@ -1,4 +1,3 @@
-import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
 import * as Location from "expo-location";
 import { Accelerometer } from "expo-sensors";
@@ -21,20 +20,11 @@ import {
   CheckCircle,
   Clock,
   Droplet,
-  Edit3,
   Gauge,
-  ListMusic,
   MapPin,
-  Music,
   Play,
-  PlusCircle,
-  RotateCcw,
-  RotateCw,
-  SkipBack,
-  SkipForward,
   Smartphone,
   Square,
-  Trash2,
   X,
 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
@@ -60,26 +50,25 @@ import {
 import Map from "../../components/Map";
 import { db } from "../../firebaseConfig";
 import { IBike } from "../../interfaces/bike";
-import {
-  ISpotifyPlaylist,
-  ISpotifyTrack,
-} from "../../interfaces/spotifyPlaylists";
 import { useAppStore } from "../../store/useAppStore";
 
 // 🛑 IMPORT HÀM CỘNG ĐIỂM HUY HIỆU
 import { recordUserStat } from "../../utils/badgeHelper";
 
+import { HIGTheme } from '../../constants/theme';
+
 const { height } = Dimensions.get("window");
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
 const COLORS = {
-  bg: "#000000",
-  card: "#121212",
-  primary: "#E31B23",
-  text: "#FFFFFF",
-  textDim: "#A0A0A0",
-  success: "#4ADE80",
-  warning: "#F59E0B",
-  info: "#3B82F6",
-  hudAccent: "#FF4500",
+  bg: themeColors.systemBackground,
+  card: themeColors.secondarySystemBackground,
+  primary: themeColors.systemRed,
+  text: themeColors.label,
+  textDim: themeColors.secondaryLabel,
+  success: themeColors.systemGreen,
+  warning: '#F59E0B',
+  info: themeColors.systemBlue,
+  hudAccent: themeColors.systemRed,
 };
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || "https://mototune-backend.onrender.com";
@@ -99,7 +88,6 @@ const calculateDistance = (
   return 12742 * Math.asin(Math.sqrt(a));
 };
 
-type LocalSong = { uri: string; name: string };
 
 const LOCATION_TRACKING_TASK = "background-location-tracking";
 
@@ -123,13 +111,6 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
   }
 });
 
-const formatMs = (ms: number) => {
-  if (isNaN(ms) || ms <= 0) return "0:00";
-  const totalSecs = Math.floor(ms / 1000);
-  const mins = Math.floor(totalSecs / 60);
-  const secs = totalSecs % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-};
 
 export default function JourneyScreen() {
   const currentUser = useAppStore((state) => state.currentUser);
@@ -149,11 +130,6 @@ export default function JourneyScreen() {
   const [crashDetected, setCrashDetected] = useState(false);
   const [countdown, setCountdown] = useState(30);
 
-  const [playlist, setPlaylist] = useState<LocalSong[]>([]);
-  const [currentSongIndex, setCurrentSongIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
-
   // Multiple bikes states
   const [selectedBikeId, setSelectedBikeId] = useState<string | null>(null);
   const [showBikeSelectModal, setShowBikeSelectModal] = useState(false);
@@ -164,48 +140,10 @@ export default function JourneyScreen() {
   const startMapHeight = useRef(250);
 
   // Spotify Online Playlists States
-  const [playlists, setPlaylists] = useState<ISpotifyPlaylist[]>([]);
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(
-    null,
-  );
-
-  // Audio Preview State
-  const previewSoundRef = useRef<Audio.Sound | null>(null);
-  const [previewingTrackId, setPreviewingTrackId] = useState<string | null>(
-    null,
-  );
-  const [previewLoadingTrackId, setPreviewLoadingTrackId] = useState<
-    string | null
-  >(null);
-
-  // Audio Player State Locks
-  const isChangingSongRef = useRef(false);
-  const [isMusicLoading, setIsMusicLoading] = useState(false);
-  const progressOpacity = useRef(new Animated.Value(1)).current;
-  const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState(false);
-  const [newPlaylistName, setNewPlaylistName] = useState("");
-  const [showPlaylistEditorModal, setShowPlaylistEditorModal] = useState(false);
-  const [editingPlaylistName, setEditingPlaylistName] = useState("");
-  const [editingPlaylistTracks, setEditingPlaylistTracks] = useState<
-    ISpotifyTrack[]
-  >([]);
-  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(
-    null,
-  );
-
-  // Spotify Online Search States
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<ISpotifyTrack[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-
-  // Music playback progress states
-  const [playbackPosition, setPlaybackPosition] = useState(0);
-  const [playbackDuration, setPlaybackDuration] = useState(0);
   const locationSubscription = useRef<Location.LocationSubscription | null>(
     null,
   );
   const accelSubscription = useRef<any>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const hudTimeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -232,563 +170,6 @@ export default function JourneyScreen() {
       },
     }),
   ).current;
-
-  // Real-time Firestore Spotify Playlists Sync
-  useEffect(() => {
-    if (!currentUser) {
-      setPlaylists([]);
-      return;
-    }
-
-    const playlistsQuery = collection(
-      db,
-      "users",
-      currentUser.uid,
-      "spotify_playlists",
-    );
-    const unsubscribe = onSnapshot(
-      playlistsQuery,
-      (snapshot) => {
-        const fetchedPlaylists: ISpotifyPlaylist[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          fetchedPlaylists.push({
-            id: docSnap.id,
-            name: data.name || "Không tên",
-            createdAt: data.createdAt || Date.now(),
-            tracks: data.tracks || [],
-          });
-        });
-        // Sort by newest first
-        fetchedPlaylists.sort((a, b) => b.createdAt - a.createdAt);
-        setPlaylists(fetchedPlaylists);
-      },
-      (error) => {
-        console.error("Firestore onSnapshot playlists error:", error);
-      },
-    );
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  useEffect(() => {
-    // Configure audio for background playback when screen is off or in silent mode
-    Audio.setAudioModeAsync({
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-
-    return () => {
-      stopJourney();
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isMusicLoading) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(progressOpacity, {
-            toValue: 0.3,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(progressOpacity, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-    } else {
-      progressOpacity.stopAnimation();
-      progressOpacity.setValue(1);
-    }
-  }, [isMusicLoading]);
-
-  // Listen to background location updates
-  useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener(
-      "background-location-update",
-      (data) => {
-        if (!isTracking) return;
-
-        const newCoord = { latitude: data.latitude, longitude: data.longitude };
-        const speedKmh = data.speed && data.speed > 0 ? data.speed * 3.6 : 0;
-        setCurrentSpeed(speedKmh);
-
-        setRouteCoords((prev) => {
-          if (prev.length > 0) {
-            const lastCoord = prev[prev.length - 1];
-            const dist = calculateDistance(
-              lastCoord.latitude,
-              lastCoord.longitude,
-              newCoord.latitude,
-              newCoord.longitude,
-            );
-            setTotalDistance((d) => d + dist);
-          }
-          return [...prev, newCoord];
-        });
-      },
-    );
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isTracking]);
-
-  if (Platform.OS === "web") {
-    return (
-      <SafeAreaView style={styles.webContainer}>
-        <Smartphone
-          size={100}
-          color={COLORS.primary}
-          style={{ marginBottom: 20 }}
-        />
-        <Text style={styles.webTitle}>TÍNH NĂNG ĐỘC QUYỀN MOBILE</Text>
-        <Text style={styles.webSub}>
-          Hành trình thông minh yêu cầu phần cứng thiết bị. Vui lòng mở ứng dụng
-          MotoTune trên điện thoại!
-        </Text>
-      </SafeAreaView>
-    );
-  }
-
-  // --- Spotify Playlist Management Functions ---
-
-  const handleConfirmPlaylistName = () => {
-    if (!newPlaylistName.trim()) {
-      return Alert.alert("Lỗi", "Vui lòng nhập tên Playlist.");
-    }
-    setEditingPlaylistId(null);
-    setEditingPlaylistName(newPlaylistName);
-    setEditingPlaylistTracks([]);
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowCreatePlaylistModal(false);
-    setShowPlaylistEditorModal(true);
-  };
-
-  const handleSearchSpotify = async () => {
-    if (!searchQuery.trim()) return;
-    setSearchLoading(true);
-    try {
-      const url = `${BACKEND_URL}/api/spotify/search?q=${encodeURIComponent(searchQuery)}`;
-      console.log("[Spotify Search] Requesting URL:", url);
-      const response = await fetch(url);
-      const rawText = await response.text();
-
-      console.log(
-        "[Spotify Search] Raw Response (first 400 chars):",
-        rawText.substring(0, 400),
-      );
-
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseErr) {
-        console.error(
-          "[Spotify Search] JSON parse failed for response:",
-          rawText,
-        );
-        throw new Error(
-          `Mã phản hồi từ Server không phải JSON. Có thể Server đang lỗi. Phản hồi thô: ${rawText.substring(0, 120)}...`,
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.message || data.error || "Lỗi truy vấn danh mục Spotify.",
-        );
-      }
-      setSearchResults(data.results || []);
-    } catch (err: any) {
-      Alert.alert(
-        "Chi tiết lỗi kết nối",
-        err.message || "Không thể kết nối đến máy chủ.",
-      );
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const handleAddTrackToPlaylist = (track: ISpotifyTrack) => {
-    setEditingPlaylistTracks((prev) => {
-      if (prev.some((t) => t.id === track.id)) return prev;
-      return [...prev, track];
-    });
-  };
-
-  const handleRemoveTrackFromPlaylist = (trackId: string) => {
-    setEditingPlaylistTracks((prev) => prev.filter((t) => t.id !== trackId));
-  };
-
-  const togglePreview = async (track: ISpotifyTrack) => {
-    try {
-      if (previewLoadingTrackId) return; // Ngăn chặn spam click trong khi đang load
-
-      if (previewingTrackId === track.id) {
-        if (previewSoundRef.current) {
-          await previewSoundRef.current.stopAsync();
-          await previewSoundRef.current.unloadAsync();
-          previewSoundRef.current = null;
-        }
-        setPreviewingTrackId(null);
-        return;
-      }
-
-      if (previewSoundRef.current) {
-        await previewSoundRef.current.stopAsync();
-        await previewSoundRef.current.unloadAsync();
-        previewSoundRef.current = null;
-      }
-      setPreviewingTrackId(track.id);
-      setPreviewLoadingTrackId(track.id);
-
-      // Also pause main music if playing
-      if (isPlaying && soundRef.current) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
-      }
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: `${BACKEND_URL}/api/spotify/stream/${track.id}` },
-        { shouldPlay: true },
-      );
-      previewSoundRef.current = sound;
-      setPreviewLoadingTrackId(null);
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPreviewingTrackId(null);
-        }
-      });
-    } catch (e) {
-      console.log("Preview error:", e);
-      setPreviewingTrackId(null);
-      setPreviewLoadingTrackId(null);
-    }
-  };
-
-  const handleSavePlaylist = async () => {
-    if (editingPlaylistTracks.length === 0) {
-      return Alert.alert(
-        "Lỗi",
-        "Vui lòng thêm ít nhất 1 bài hát vào playlist.",
-      );
-    }
-    if (!currentUser) return;
-
-    // Cleanup preview
-    if (previewSoundRef.current) {
-      try {
-        await previewSoundRef.current.stopAsync();
-        await previewSoundRef.current.unloadAsync();
-        previewSoundRef.current = null;
-      } catch (e) {}
-    }
-    setPreviewingTrackId(null);
-
-    try {
-      if (editingPlaylistId) {
-        // Edit existing playlist
-        const playlistDocRef = doc(
-          db,
-          "users",
-          currentUser.uid,
-          "spotify_playlists",
-          editingPlaylistId,
-        );
-        await setDoc(
-          playlistDocRef,
-          {
-            name: editingPlaylistName,
-            tracks: editingPlaylistTracks,
-          },
-          { merge: true },
-        );
-        Alert.alert(
-          "Thành công",
-          `Đã cập nhật danh sách phát "${editingPlaylistName}".`,
-        );
-      } else {
-        // Create new playlist
-        const userPlaylistsRef = collection(
-          db,
-          "users",
-          currentUser.uid,
-          "spotify_playlists",
-        );
-        await addDoc(userPlaylistsRef, {
-          name: editingPlaylistName,
-          createdAt: Date.now(),
-          tracks: editingPlaylistTracks,
-        });
-        Alert.alert(
-          "Thành công",
-          `Đã lưu danh sách phát "${editingPlaylistName}".`,
-        );
-      }
-
-      setShowPlaylistEditorModal(false);
-      setNewPlaylistName("");
-      setEditingPlaylistId(null);
-    } catch (error: any) {
-      Alert.alert("Lỗi lưu trữ", "Không thể lưu danh sách phát lúc này.");
-    }
-  };
-
-  const handleClosePlaylistEditor = () => {
-    Alert.alert(
-      "Xác nhận",
-      "Bạn có chắc muốn thoát? Các bài hát chưa lưu sẽ bị mất.",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Đồng ý",
-          style: "destructive",
-          onPress: async () => {
-            if (previewSoundRef.current) {
-              try {
-                await previewSoundRef.current.stopAsync();
-                await previewSoundRef.current.unloadAsync();
-                previewSoundRef.current = null;
-              } catch (e) {}
-            }
-            setPreviewingTrackId(null);
-            setShowPlaylistEditorModal(false);
-            setNewPlaylistName("");
-            setEditingPlaylistId(null);
-          },
-        },
-      ],
-    );
-  };
-
-  const handleEditPlaylist = (playlistItem: ISpotifyPlaylist) => {
-    setEditingPlaylistId(playlistItem.id);
-    setEditingPlaylistName(playlistItem.name);
-    setEditingPlaylistTracks(playlistItem.tracks || []);
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowPlaylistEditorModal(true);
-  };
-
-  const handleDeletePlaylist = (playlistId: string, playlistName: string) => {
-    Alert.alert(
-      "Xác nhận xóa",
-      `Bạn có chắc muốn xóa vĩnh viễn playlist "${playlistName}" không?`,
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Xóa",
-          style: "destructive",
-          onPress: async () => {
-            if (!currentUser) return;
-            try {
-              const playlistDocRef = doc(
-                db,
-                "users",
-                currentUser.uid,
-                "spotify_playlists",
-                playlistId,
-              );
-              await deleteDoc(playlistDocRef);
-              Alert.alert("Thành công", "Đã xóa danh sách phát.");
-              if (selectedPlaylistId === playlistId) {
-                setSelectedPlaylistId(null);
-              }
-            } catch (e) {
-              Alert.alert("Lỗi", "Không thể xóa danh sách phát lúc này.");
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  // --- Audio Player Functions ---
-
-  const pickSongs = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "audio/*",
-        multiple: true,
-      });
-      if (!result.canceled && result.assets) {
-        const newSongs = result.assets.map((asset) => ({
-          uri: asset.uri,
-          name: asset.name,
-        }));
-        setPlaylist((prev) => [...prev, ...newSongs]);
-      }
-    } catch (e) {
-      Alert.alert("Lỗi", "Không thể chọn nhạc.");
-    }
-  };
-
-  const isYoutubeTrack = (uri: string) => {
-    return (
-      uri &&
-      !uri.startsWith("http") &&
-      !uri.startsWith("file") &&
-      !uri.startsWith("content") &&
-      uri.length <= 15
-    );
-  };
-
-  const playMusic = async (index: number, customPlaylist?: LocalSong[]) => {
-    if (isChangingSongRef.current) return;
-
-    const activePlaylist = customPlaylist || playlist;
-    if (activePlaylist.length === 0) return;
-
-    isChangingSongRef.current = true;
-    setIsMusicLoading(true);
-
-    setPlaybackPosition(0);
-    setPlaybackDuration(0);
-
-    if (soundRef.current) {
-      try {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      } catch (e) {}
-    }
-
-    const track = activePlaylist[index];
-    setCurrentSongIndex(index);
-
-    // Dynamic on-the-fly migration of old iTunes playlist tracks to YouTube full-length tracks
-    if (
-      track.uri &&
-      track.uri.startsWith("http") &&
-      !track.uri.includes("localhost") &&
-      !track.uri.includes("onrender.com") &&
-      !track.uri.includes("firebasestorage") &&
-      !track.uri.includes("file:") &&
-      !track.uri.includes("content:")
-    ) {
-      try {
-        console.log(
-          `[Playback Migration] Migrating old track: "${track.name}" to YouTube...`,
-        );
-        const query = track.name.replace(" - ", " ");
-        const searchUrl = `${BACKEND_URL}/api/spotify/search?q=${encodeURIComponent(query)}`;
-        const response = await fetch(searchUrl);
-        const data = await response.json();
-        if (data.results && data.results.length > 0) {
-          const ytVideoId = data.results[0].uri;
-          console.log(
-            `[Playback Migration] Found YouTube ID: ${ytVideoId} for "${track.name}"`,
-          );
-          track.uri = ytVideoId;
-          activePlaylist[index].uri = ytVideoId;
-        }
-      } catch (e) {
-        console.error(
-          "[Playback Migration] Failed to migrate old track to YouTube:",
-          e,
-        );
-      }
-    }
-
-    try {
-      let finalUri = track.uri;
-      if (isYoutubeTrack(track.uri)) {
-        finalUri = `${BACKEND_URL}/api/spotify/stream/${track.uri}`;
-        console.log(`[Audio Stream] Proxying YouTube track: ${finalUri}`);
-      }
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: finalUri },
-        { shouldPlay: true },
-      );
-      soundRef.current = sound;
-      setIsPlaying(true);
-
-      soundRef.current.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded) {
-          setPlaybackPosition(status.positionMillis || 0);
-          setPlaybackDuration(status.durationMillis || 0);
-          if (status.didJustFinish) {
-            nextSong();
-          }
-        } else if (status.error) {
-          console.error(`[Audio Stream Error]: ${status.error}`);
-          Alert.alert(
-            "Lỗi phát nhạc",
-            "Lỗi khi tải luồng âm thanh từ Backend.",
-          );
-        }
-      });
-    } catch (error) {
-      Alert.alert(
-        "Lỗi phát nhạc",
-        "File nhạc có thể bị hỏng hoặc máy chủ xử lý lỗi bản quyền.",
-      );
-    } finally {
-      isChangingSongRef.current = false;
-      setIsMusicLoading(false);
-    }
-  };
-
-  const seekForward = async () => {
-    if (soundRef.current && playbackDuration > 0) {
-      const newPos = Math.min(playbackPosition + 5000, playbackDuration);
-      await soundRef.current.setPositionAsync(newPos);
-      setPlaybackPosition(newPos);
-    }
-  };
-
-  const seekBackward = async () => {
-    if (soundRef.current) {
-      const newPos = Math.max(playbackPosition - 5000, 0);
-      await soundRef.current.setPositionAsync(newPos);
-      setPlaybackPosition(newPos);
-    }
-  };
-
-  const togglePlayPause = async () => {
-    if (playlist.length === 0) return;
-    if (!soundRef.current) {
-      playMusic(currentSongIndex);
-      return;
-    }
-
-    if (isPlaying) {
-      await soundRef.current.pauseAsync();
-      setIsPlaying(false);
-    } else {
-      await soundRef.current.playAsync();
-      setIsPlaying(true);
-    }
-  };
-
-  const nextSong = () => {
-    if (playlist.length > 0)
-      playMusic((currentSongIndex + 1) % playlist.length);
-  };
-  const prevSong = () => {
-    if (playlist.length > 0)
-      playMusic((currentSongIndex - 1 + playlist.length) % playlist.length);
-  };
-
-  const stopMusic = async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-      } catch (e) {}
-    }
-    setIsPlaying(false);
-    setPlaybackPosition(0);
-    setPlaybackDuration(0);
-  };
 
   // --- Journey Lifecycle Functions ---
 
@@ -849,21 +230,6 @@ export default function JourneyScreen() {
       }
     }
 
-    // Load Spotify selected playlist tracks if any
-    let selectedPlaylistTracks: LocalSong[] = [];
-    if (selectedPlaylistId) {
-      const activePlaylist = playlists.find((p) => p.id === selectedPlaylistId);
-      if (activePlaylist && activePlaylist.tracks.length > 0) {
-        selectedPlaylistTracks = activePlaylist.tracks.map((t) => ({
-          uri: t.uri,
-          name: `${t.title} - ${t.artist}`,
-        }));
-      }
-    }
-
-    setPlaylist(selectedPlaylistTracks);
-    setCurrentSongIndex(0);
-    setIsPlaying(false);
 
     setIsTracking(true);
     const now = Date.now();
@@ -996,7 +362,6 @@ export default function JourneyScreen() {
 
   const stopJourney = async () => {
     if (!isTracking) return;
-    stopMusic();
 
     // Stop background location updates
     try {
@@ -1116,7 +481,6 @@ export default function JourneyScreen() {
     setTotalDistance(0);
     setElapsedTime("00:00");
     setSelectedBikeId(null);
-    setSelectedPlaylistId(null);
   };
 
   return (
@@ -1133,260 +497,6 @@ export default function JourneyScreen() {
         </View>
       )}
 
-      {/* Playlist Name Prompt Modal */}
-      <Modal visible={showCreatePlaylistModal} transparent animationType="fade">
-        <View style={styles.promptOverlay}>
-          <View style={styles.promptCard}>
-            <Text style={styles.promptTitle}>TẠO PLAYLIST SPOTIFY</Text>
-            <Text style={styles.promptSubtitle}>
-              Nhập tên danh sách phát của bạn:
-            </Text>
-            <TextInput
-              style={styles.promptInput}
-              placeholder="Ví dụ: Nhạc Bào Đêm, Đi Tour..."
-              placeholderTextColor="#666"
-              value={newPlaylistName}
-              onChangeText={setNewPlaylistName}
-              maxLength={30}
-            />
-            <View style={styles.promptActions}>
-              <TouchableOpacity
-                style={styles.promptCancelBtn}
-                onPress={() => {
-                  setShowCreatePlaylistModal(false);
-                  setNewPlaylistName("");
-                }}
-              >
-                <Text style={styles.promptCancelBtnText}>HỦY</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.promptConfirmBtn}
-                onPress={handleConfirmPlaylistName}
-              >
-                <Text style={styles.promptConfirmBtnText}>TIẾP TỤC</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Spotify Playlist Editor Modal */}
-      <Modal
-        visible={showPlaylistEditorModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.editorContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              PLAYLIST: {editingPlaylistName.toUpperCase()}
-            </Text>
-            <TouchableOpacity onPress={handleClosePlaylistEditor}>
-              <X size={28} color={COLORS.textDim} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Selected tracks list */}
-          <View style={styles.selectedTracksBox}>
-            <Text style={styles.selectedLabel}>
-              ĐÃ CHỌN ({editingPlaylistTracks.length} BÀI):
-            </Text>
-            <FlatList
-              horizontal
-              data={editingPlaylistTracks}
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingVertical: 5 }}
-              renderItem={({ item }) => (
-                <View style={styles.trackTag}>
-                  <Text style={styles.trackTagText} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveTrackFromPlaylist(item.id)}
-                  >
-                    <X size={14} color="white" style={{ marginLeft: 5 }} />
-                  </TouchableOpacity>
-                </View>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptySelectedText}>
-                  Chưa có bài hát nào được chọn
-                </Text>
-              }
-            />
-          </View>
-
-          {/* Online Music Search */}
-          <View style={styles.searchBarBox}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm nhạc Spotify trực tuyến..."
-              placeholderTextColor="#777"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearchSpotify}
-            />
-            <TouchableOpacity
-              style={styles.searchBtn}
-              onPress={handleSearchSpotify}
-            >
-              <Text style={styles.searchBtnText}>TÌM</Text>
-            </TouchableOpacity>
-          </View>
-
-          {searchLoading ? (
-            <ActivityIndicator
-              size="large"
-              color={COLORS.primary}
-              style={{ marginTop: 50 }}
-            />
-          ) : (
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 20 }}
-              renderItem={({ item }) => {
-                const isAdded = editingPlaylistTracks.some(
-                  (t) => t.id === item.id,
-                );
-                return (
-                  <View style={styles.searchResultRow}>
-                    <View style={styles.searchCoverContainer}>
-                      <Image
-                        source={{ uri: item.coverUrl }}
-                        style={styles.searchCover}
-                      />
-                      {previewLoadingTrackId === item.id && (
-                        <View style={styles.previewLoadingOverlay}>
-                          <ActivityIndicator
-                            size="small"
-                            color={COLORS.primary}
-                          />
-                        </View>
-                      )}
-                    </View>
-                    <View style={{ flex: 1, marginRight: 10 }}>
-                      <Text style={styles.searchTrackName} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.searchArtistName} numberOfLines={1}>
-                        {item.artist}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
-                      <TouchableOpacity
-                        style={[
-                          styles.trackAddBtn,
-                          previewingTrackId === item.id && {
-                            backgroundColor: COLORS.primary,
-                          },
-                        ]}
-                        onPress={() => togglePreview(item)}
-                      >
-                        <Text style={styles.trackAddBtnTxt}>
-                          {previewingTrackId === item.id ? "DỪNG" : "NGHE THỬ"}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.trackAddBtn,
-                          isAdded && styles.trackAddedBtn,
-                        ]}
-                        onPress={() =>
-                          isAdded
-                            ? handleRemoveTrackFromPlaylist(item.id)
-                            : handleAddTrackToPlaylist(item)
-                        }
-                      >
-                        <Text style={styles.trackAddBtnTxt}>
-                          {isAdded ? "HỦY" : "THÊM"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              }}
-              ListEmptyComponent={
-                <Text style={styles.emptySearchText}>
-                  {searchQuery
-                    ? "Không tìm thấy bài hát nghe thử."
-                    : "Nhập tên bài hát hoặc ca sĩ để tìm kiếm nhạc trực tiếp từ Spotify."}
-                </Text>
-              }
-            />
-          )}
-
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSavePlaylist}>
-            <Text style={styles.saveBtnText}>LƯU DANH SÁCH PHÁT</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-      </Modal>
-
-      {/* Local picker Modal */}
-      <Modal
-        visible={showPlaylistModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.playlistContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>BẢN TIN NHẠC</Text>
-            <TouchableOpacity onPress={() => setShowPlaylistModal(false)}>
-              <X size={28} color={COLORS.textDim} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.importBtn} onPress={pickSongs}>
-            <PlusCircle size={20} color="white" />
-            <Text style={styles.importBtnText}>
-              Nhập file nhạc từ điện thoại
-            </Text>
-          </TouchableOpacity>
-          <FlatList
-            data={playlist}
-            keyExtractor={(_, index) => index.toString()}
-            contentContainerStyle={{ padding: 20 }}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={[
-                  styles.songItem,
-                  index === currentSongIndex && styles.activeSongItem,
-                ]}
-                onPress={() => playMusic(index)}
-              >
-                <Music
-                  size={18}
-                  color={
-                    index === currentSongIndex ? COLORS.primary : COLORS.textDim
-                  }
-                />
-                <Text
-                  style={[
-                    styles.songName,
-                    index === currentSongIndex && styles.activeSongName,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <Text style={styles.emptyPlaylist}>
-                Chưa có bài hát nào được chọn.
-              </Text>
-            }
-          />
-        </SafeAreaView>
-      </Modal>
-
-      {/* Summary Dialog */}
       <Modal visible={showSummary} transparent animationType="fade">
         <View style={styles.summaryOverlay}>
           <View style={styles.summaryCard}>
@@ -1486,121 +596,6 @@ export default function JourneyScreen() {
           </Text>
 
           {/* Spotify Playlists Selection Section */}
-          {currentUser && (
-            <View style={styles.lobbyPlaylistSection}>
-              <View style={styles.lobbyPlaylistHeader}>
-                <Text
-                  style={[
-                    styles.lobbyPlaylistTitle,
-                    { flex: 1, marginRight: 10 },
-                  ]}
-                  numberOfLines={1}
-                >
-                  PLAYLIST NHẠC
-                </Text>
-                <TouchableOpacity
-                  style={styles.createPlaylistBtn}
-                  onPress={() => setShowCreatePlaylistModal(true)}
-                >
-                  <PlusCircle size={14} color={COLORS.primary} />
-                  <Text style={styles.createPlaylistBtnText}>Tạo Mới</Text>
-                </TouchableOpacity>
-              </View>
-
-              <FlatList
-                horizontal
-                data={playlists}
-                keyExtractor={(item) => item.id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 12, paddingVertical: 5 }}
-                renderItem={({ item }) => {
-                  const isSelected = selectedPlaylistId === item.id;
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.playlistCard,
-                        isSelected && styles.selectedPlaylistCard,
-                      ]}
-                      onPress={() =>
-                        setSelectedPlaylistId(isSelected ? null : item.id)
-                      }
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          width: "100%",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginBottom: 6,
-                        }}
-                      >
-                        <Music
-                          size={16}
-                          color={isSelected ? "black" : COLORS.primary}
-                        />
-                        <View style={{ flexDirection: "row", gap: 12 }}>
-                          <TouchableOpacity
-                            onPress={() => handleEditPlaylist(item)}
-                            hitSlop={{
-                              top: 10,
-                              bottom: 10,
-                              left: 10,
-                              right: 10,
-                            }}
-                          >
-                            <Edit3
-                              size={13}
-                              color={isSelected ? "#333" : "#888"}
-                            />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() =>
-                              handleDeletePlaylist(item.id, item.name)
-                            }
-                            hitSlop={{
-                              top: 10,
-                              bottom: 10,
-                              left: 10,
-                              right: 10,
-                            }}
-                          >
-                            <Trash2
-                              size={13}
-                              color={isSelected ? "#E31B23" : "#666"}
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                      <Text
-                        style={[
-                          styles.playlistCardName,
-                          isSelected && styles.selectedPlaylistCardName,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.playlistCardTracks,
-                          isSelected && styles.selectedPlaylistCardTracks,
-                        ]}
-                      >
-                        {item.tracks?.length || 0} bài hát
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                }}
-                ListEmptyComponent={
-                  <Text style={styles.emptyPlaylists}>
-                    Bạn chưa có playlist Spotify nào. Nhấn &apos;Tạo Mới&apos;
-                    để thêm nhạc trực tuyến.
-                  </Text>
-                }
-              />
-            </View>
-          )}
-
           <TouchableOpacity
             style={[styles.startBtn, { alignSelf: "center", marginTop: 25 }]}
             onPress={handlePressStart}
@@ -1649,103 +644,13 @@ export default function JourneyScreen() {
             </View>
           </View>
 
-          {/* Music Mini Player & Controls */}
-          <View style={styles.musicAndControlRow}>
-            {playlist.length > 0 ? (
-              <View style={styles.miniPlayer}>
-                <View style={styles.miniPlayerHeader}>
-                  <Music size={16} color={COLORS.primary} />
-                  <Text style={styles.miniSongName} numberOfLines={1}>
-                    {playlist[currentSongIndex].name}
-                  </Text>
-                </View>
 
-                {/* Sleek Progress Bar */}
-                <Animated.View
-                  style={[
-                    styles.progressBarContainer,
-                    { opacity: progressOpacity },
-                  ]}
-                >
-                  <View style={styles.progressBarBackground}>
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        {
-                          width: `${playbackDuration > 0 ? (playbackPosition / playbackDuration) * 100 : 0}%`,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.progressTimeRow}>
-                    <Text style={styles.progressTimeText}>
-                      {formatMs(playbackPosition)}
-                    </Text>
-                    <Text style={styles.progressTimeText}>
-                      {formatMs(playbackDuration)}
-                    </Text>
-                  </View>
-                </Animated.View>
-
-                <View style={styles.miniControls}>
-                  <TouchableOpacity
-                    onPress={prevSong}
-                    style={styles.controlIconBtn}
-                  >
-                    <SkipBack size={22} color="white" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={seekBackward}
-                    style={styles.controlIconBtn}
-                  >
-                    <RotateCcw size={20} color={COLORS.textDim} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={togglePlayPause}
-                    style={styles.playPauseBtn}
-                  >
-                    <Text style={styles.playPauseBtnText}>
-                      {isPlaying ? "TẠM DỪNG" : "PHÁT NHẠC"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={seekForward}
-                    style={styles.controlIconBtn}
-                  >
-                    <RotateCw size={20} color={COLORS.textDim} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={nextSong}
-                    style={styles.controlIconBtn}
-                  >
-                    <SkipForward size={22} color="white" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.noMusicBtn}
-                onPress={() => setShowPlaylistModal(true)}
-              >
-                <Music size={18} color="white" />
-                <Text style={styles.noMusicBtnTxt}>CHỌN NHẠC ĐỒNG HÀNH</Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.hudControls}>
-              {playlist.length > 0 && (
-                <TouchableOpacity
-                  style={styles.hudCircleBtn}
-                  onPress={() => setShowPlaylistModal(true)}
-                >
-                  <ListMusic size={20} color="white" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.stopBtn} onPress={stopJourney}>
-                <Square size={24} color="white" />
-                <Text style={styles.stopBtnText}>KẾT THÚC</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Controls */}
+          <View style={styles.hudControls}>
+            <TouchableOpacity style={styles.stopBtn} onPress={stopJourney}>
+              <Square size={24} color="white" />
+              <Text style={styles.stopBtnText}>KẾT THÚC</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}

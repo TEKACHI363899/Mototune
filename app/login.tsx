@@ -19,14 +19,14 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { auth } from '../firebaseConfig';
-
-const COLORS = {
-  bg: '#121212', card: '#1E1E1E', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0'
-};
+import { HIGTheme, HIGSpacing, HIGTouchTarget } from '../constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const theme = 'dark'; // Force dark mode for MotoTune
+  const colors = HIGTheme[theme];
   const [loading, setLoading] = useState(false);
   
   const [isEmailMode, setIsEmailMode] = useState(false);
@@ -76,11 +76,11 @@ export default function LoginScreen() {
   // --- GIAO DIỆN NHẬP EMAIL ---
   if (isEmailMode) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.systemBackground }]}>
+        <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={colors.systemBackground} />
         
-        <TouchableOpacity style={[styles.backBtn, { marginHorizontal: 30 }]} onPress={() => setIsEmailMode(false)}>
-          <ArrowLeft size={24} color={COLORS.text} />
+        <TouchableOpacity style={[styles.backBtn, { marginHorizontal: 30, backgroundColor: colors.secondarySystemBackground }]} onPress={() => setIsEmailMode(false)}>
+          <ArrowLeft size={24} color={colors.label} />
         </TouchableOpacity>
 
         {/* 🛑 HỆ THỐNG CHỐNG BÀN PHÍM CHE KHUẤT */}
@@ -95,14 +95,18 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled" // Cho phép bấm nút Đăng nhập mà ko bị mất focus đột ngột
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.title}>TÀI KHOẢN MOTO<Text style={{color: COLORS.primary}}>TUNE</Text></Text>
-            <Text style={styles.subTitle}>Sử dụng email để lưu trữ thông tin xe và đồng bộ lên đám mây.</Text>
+            <Text style={[styles.title, { color: colors.label }]}>TÀI KHOẢN MOTO<Text style={{color: colors.systemRed}}>TUNE</Text></Text>
+            <Text style={[styles.subTitle, { color: colors.secondaryLabel }]}>Sử dụng email để lưu trữ thông tin xe và đồng bộ lên đám mây.</Text>
 
             <View style={{ marginTop: 30, gap: 15 }}>
               <TextInput
-                style={[styles.input, focusedInput === 'email' && styles.inputFocused]}
+                style={[
+                  styles.input, 
+                  { backgroundColor: colors.secondarySystemBackground, color: colors.label, borderColor: colors.separator }, 
+                  focusedInput === 'email' && { borderColor: colors.systemRed, backgroundColor: theme === 'dark' ? '#2a1a1a' : '#fce8e8' }
+                ]}
                 placeholder="Địa chỉ Email"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.secondaryLabel}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -113,9 +117,13 @@ export default function LoginScreen() {
               />
 
               <TextInput
-                style={[styles.input, focusedInput === 'password' && styles.inputFocused]}
+                style={[
+                  styles.input, 
+                  { backgroundColor: colors.secondarySystemBackground, color: colors.label, borderColor: colors.separator }, 
+                  focusedInput === 'password' && { borderColor: colors.systemRed, backgroundColor: theme === 'dark' ? '#2a1a1a' : '#fce8e8' }
+                ]}
                 placeholder="Mật khẩu (Ít nhất 6 ký tự)"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.secondaryLabel}
                 secureTextEntry
                 value={password}
                 onChangeText={setPassword}
@@ -123,15 +131,18 @@ export default function LoginScreen() {
                 onBlur={() => setFocusedInput('')}
                 returnKeyType="done"
               />
+              <TouchableOpacity onPress={() => router.push('/forgot-password')} style={{alignSelf: 'flex-end'}}>
+                <Text style={{color: colors.systemBlue, fontWeight: 'bold'}}>Quên mật khẩu?</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={{ marginTop: 30, gap: 15 }}>
-              <TouchableOpacity style={styles.btnPrimary} onPress={handleEmailLogin} disabled={loading}>
+              <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: colors.systemRed, shadowColor: colors.systemRed }]} onPress={handleEmailLogin} disabled={loading}>
                 {loading ? <ActivityIndicator color="white" /> : <Text style={styles.btnPrimaryText}>ĐĂNG NHẬP</Text>}
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.btnSecondary} onPress={handleEmailRegister} disabled={loading}>
-                <Text style={styles.btnSecondaryText}>TẠO TÀI KHOẢN MỚI</Text>
+              <TouchableOpacity style={[styles.btnSecondary, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]} onPress={handleEmailRegister} disabled={loading}>
+                <Text style={[styles.btnSecondaryText, { color: colors.label }]}>TẠO TÀI KHOẢN MỚI</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -142,17 +153,17 @@ export default function LoginScreen() {
 
   // --- GIAO DIỆN CHÍNH (WELCOME) ---
   return (
-    <SafeAreaView style={[styles.container, { padding: 30 }]}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <SafeAreaView style={[styles.container, { padding: 30, backgroundColor: colors.systemBackground }]}>
+      <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={colors.systemBackground} />
       
       <View style={styles.logoContainer}>
-        <Bike size={80} color={COLORS.primary} style={{ marginBottom: 20 }} />
-        <Text style={styles.logoText}>MOTO<Text style={{color: COLORS.primary}}>TUNE</Text></Text>
-        <Text style={styles.subText}>Cộng đồng Biker Việt Nam</Text>
+        <Bike size={80} color={colors.systemRed} style={{ marginBottom: 20 }} />
+        <Text style={[styles.logoText, { color: colors.label }]}>MOTO<Text style={{color: colors.systemRed}}>TUNE</Text></Text>
+        <Text style={[styles.subText, { color: colors.secondaryLabel }]}>Cộng đồng Biker Việt Nam</Text>
       </View>
 
       <View style={styles.actionContainer}>
-        <TouchableOpacity style={styles.btnPrimary} onPress={handleAnonymousLogin} disabled={loading}>
+        <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: colors.systemRed, shadowColor: colors.systemRed }]} onPress={handleAnonymousLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="white" /> : (
             <>
               <Text style={styles.btnPrimaryText}>TRẢI NGHIỆM NGAY</Text>
@@ -161,9 +172,9 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnSecondary} onPress={() => { Haptics.selectionAsync(); setIsEmailMode(true); }}>
-          <Mail size={20} color={COLORS.text} />
-          <Text style={styles.btnSecondaryText}>Đăng nhập bằng Email / Google</Text>
+        <TouchableOpacity style={[styles.btnSecondary, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]} onPress={() => { Haptics.selectionAsync(); setIsEmailMode(true); }}>
+          <Mail size={20} color={colors.label} />
+          <Text style={[styles.btnSecondaryText, { color: colors.label }]}>Đăng nhập bằng Email / Google</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -171,24 +182,23 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1 },
   logoContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  logoText: { fontSize: 42, fontWeight: '900', fontStyle: 'italic', color: COLORS.text, letterSpacing: 2 },
-  subText: { color: COLORS.textDim, fontSize: 14, marginTop: 10, letterSpacing: 1 },
+  logoText: { fontSize: 42, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2 },
+  subText: { fontSize: 14, marginTop: 10, letterSpacing: 1 },
   actionContainer: { paddingBottom: 50, gap: 15 },
   
-  btnPrimary: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  btnPrimary: { flexDirection: 'row', padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 10, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, minHeight: HIGTouchTarget.min },
   btnPrimaryText: { color: 'white', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-  btnSecondary: { flexDirection: 'row', backgroundColor: COLORS.card, padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, borderColor: '#333' },
-  btnSecondaryText: { color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
+  btnSecondary: { flexDirection: 'row', padding: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 10, borderWidth: 1, minHeight: HIGTouchTarget.min },
+  btnSecondaryText: { fontSize: 14, fontWeight: 'bold' },
 
-  backBtn: { marginTop: 10, alignSelf: 'flex-start', padding: 10, backgroundColor: COLORS.card, borderRadius: 12 },
+  backBtn: { marginTop: 10, alignSelf: 'flex-start', padding: 10, borderRadius: 12, minHeight: HIGTouchTarget.min, minWidth: HIGTouchTarget.min, alignItems: 'center', justifyContent: 'center' },
   
   // 🛑 Căn chỉnh lại Form chứa Email/Password để ScrollView chạy mượt
   scrollFormContainer: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 30, paddingBottom: 50, paddingTop: 20 },
   
-  title: { fontSize: 28, fontWeight: '900', color: COLORS.text, fontStyle: 'italic' },
-  subTitle: { color: COLORS.textDim, fontSize: 14, marginTop: 10, lineHeight: 22 },
-  input: { backgroundColor: '#222', color: 'white', padding: 20, borderRadius: 12, fontSize: 16, borderWidth: 2, borderColor: '#333' },
-  inputFocused: { borderColor: COLORS.primary, backgroundColor: '#2a1a1a' }
+  title: { fontSize: 28, fontWeight: '900', fontStyle: 'italic' },
+  subTitle: { fontSize: 14, marginTop: 10, lineHeight: 22 },
+  input: { padding: 20, borderRadius: 12, fontSize: 16, borderWidth: 1, minHeight: 60 },
 });

@@ -5,7 +5,9 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
-const COLORS = { bg: '#000000', card: '#1a1a1a', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0' };
+import { HIGTheme } from '../../constants/theme';
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel };
 
 export default function ChatScreen() {
   const { id: otherUserId, name, avatar } = useLocalSearchParams();

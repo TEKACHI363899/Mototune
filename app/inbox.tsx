@@ -5,7 +5,9 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, Image, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
-const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0' };
+import { HIGTheme } from '../constants/theme';
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel };
 
 export default function InboxScreen() {
   const router = useRouter();

@@ -28,21 +28,24 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 
-// 🛑 IMPORT HÀM CỘNG ĐIỂM HUY HIỆU
+// IMPORT HÀM CỘNG ĐIỂM HUY HIỆU
 import {
   fetchAITextResponse,
   fetchAIVideoResponse,
 } from "../services/geminiService";
 import { recordUserStat } from "../utils/badgeHelper";
 
+import { HIGTheme } from '../constants/theme';
+
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
 const COLORS = {
-  bg: "#000000",
-  card: "#121212",
-  primary: "#E31B23",
-  text: "#FFFFFF",
-  textDim: "#A0A0A0",
-  botBubble: "#1A1A1A",
-  userBubble: "#E31B23",
+  bg: themeColors.systemBackground,
+  card: themeColors.secondarySystemBackground,
+  primary: themeColors.systemRed,
+  text: themeColors.label,
+  textDim: themeColors.secondaryLabel,
+  botBubble: themeColors.secondarySystemBackground,
+  userBubble: themeColors.systemRed,
 };
 
 type Message = {
@@ -135,7 +138,7 @@ export default function AIMechanicScreen() {
 - Khi khách hỏi tìm tiệm sửa xe, hãy khoanh vùng khu vực dựa vào VỊ TRÍ HIỆN TẠI.
 - BẮT BUỘC chèn đường link tìm kiếm động này: https://www.google.com/maps/search/?api=1&query=tiệm+thay+nhớt+sửa+xe+máy+gần+đây
 
-3. BẮT BUỘC Ở CUỐI CÂU: Chèn nguyên văn "⚠️ LƯU Ý: Chẩn đoán A.I chỉ mang tính chất tham khảo. Bạn hãy mang xe ra Garage uy tín để kiểm tra nhé!".
+3. BẮT BUỘC Ở CUỐI CÂU: Chèn nguyên văn "LƯU Ý: Chẩn đoán A.I chỉ mang tính chất tham khảo. Bạn hãy mang xe ra Garage uy tín để kiểm tra nhé!".
 4. Phong cách: Biker bụi bặm.`;
 
   // Local fetch functions removed and moved to geminiService
@@ -162,7 +165,7 @@ export default function AIMechanicScreen() {
     ]);
     setIsLoading(false);
 
-    // 🛑 TRIGGER: CỘNG ĐIỂM HUY HIỆU THỢ ĐỤNG KHI CHAT
+    // TRIGGER: CỘNG ĐIỂM HUY HIỆU THỢ ĐỤNG KHI CHAT
     if (auth.currentUser) {
       await recordUserStat(auth.currentUser.uid, "ai_mechanic", 1);
     }
@@ -207,7 +210,7 @@ export default function AIMechanicScreen() {
             { id: (Date.now() + 1).toString(), text: aiText, sender: "bot" },
           ]);
 
-          // 🛑 TRIGGER: CỘNG ĐIỂM HUY HIỆU THỢ ĐỤNG KHI GỬI VIDEO THÀNH CÔNG
+          // TRIGGER: CỘNG ĐIỂM HUY HIỆU THỢ ĐỤNG KHI GỬI VIDEO THÀNH CÔNG
           if (auth.currentUser) {
             await recordUserStat(auth.currentUser.uid, "ai_mechanic", 1);
           }
@@ -302,7 +305,7 @@ export default function AIMechanicScreen() {
           >
             <View style={styles.overlayTop}>
               <Text style={styles.warningText}>
-                ⚠️ KẾT QUẢ A.I CHỈ ĐỂ THAM KHẢO
+                KẾT QUẢ A.I CHỈ ĐỂ THAM KHẢO
               </Text>
               <Text style={styles.instructionText}>
                 Hãy để cụm Micro điện thoại gần lốc máy / pô xe
@@ -334,7 +337,7 @@ export default function AIMechanicScreen() {
 
             {isRecording && (
               <Text style={styles.recordingText}>
-                🔴 Đang thu âm A.I (5s)...
+                Đang thu âm A.I (5s)...
               </Text>
             )}
           </CameraView>
@@ -347,7 +350,7 @@ export default function AIMechanicScreen() {
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>BÁC SĨ XẾ NỔ</Text>
-          <Text style={styles.headerStatus}>🟢 A.I đang trực tuyến</Text>
+          <Text style={styles.headerStatus}>A.I đang trực tuyến</Text>
         </View>
         <View style={{ width: 28 }} />
       </View>

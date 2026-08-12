@@ -12,8 +12,10 @@ import { uploadToCloudinary } from '../services/cloudinaryService';
 
 // 🛑 IMPORT COMPONENT HUY HIỆU
 import UserBadge from '../components/UserBadge';
+import { HIGTheme } from '../constants/theme';
 
-const COLORS = { bg: '#121212', card: '#1E1E1E', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0' };
+const themeColors = HIGTheme.dark; // 🔴 Bắt buộc màu đen/đỏ
+const COLORS = { bg: themeColors.systemBackground, card: themeColors.secondarySystemBackground, primary: themeColors.systemRed, text: themeColors.label, textDim: themeColors.secondaryLabel };
 // Cloudinary credentials managed via cloudinaryService
 
 export default function ProfileScreen() {

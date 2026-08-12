@@ -1,15 +1,17 @@
 import { Tabs } from 'expo-router';
 import { Bike, Compass, Home, Map, ShoppingBag } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { HIGTheme, HIGSpacing, HIGTouchTarget } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
-const COLORS = { bg: '#000000', card: '#121212', primary: '#E31B23', text: '#FFFFFF', textDim: '#A0A0A0' };
 
 // 🧠 HỆ THỐNG MENU TÙY CHỈNH KẾT HỢP ANIMATION CHÍNH XÁC TUYỆT ĐỐI
 function MotoTabBar({ state, descriptors, navigation }: any) {
   // Biến lưu trữ tọa độ X của chiếc xe
   const translateX = useRef(new Animated.Value(0)).current;
+  const theme = 'dark'; // Force dark mode for MotoTune
+  const colors = HIGTheme[theme];
   
   // Tự động chia đều chiều rộng màn hình cho tổng số Tab (Hiện tại là 4)
   const tabWidth = width / state.routes.length;
@@ -25,12 +27,12 @@ function MotoTabBar({ state, descriptors, navigation }: any) {
   }, [state.index, tabWidth]);
 
   return (
-    <View style={styles.tabBarContainer}>
+    <View style={[styles.tabBarContainer, { backgroundColor: colors.systemBackground, borderTopColor: colors.separator }]}>
       
       {/* 🏍️ CHIẾC XE MÔ TÔ DI CHUYỂN BÊN TRÊN */}
       <Animated.View style={[styles.indicatorWrapper, { width: tabWidth, transform: [{ translateX }] }]}>
-        <Bike size={22} color={COLORS.primary} style={styles.bikeIcon} />
-        <View style={styles.indicatorLine} />
+        <Bike size={22} color={colors.systemRed} style={styles.bikeIcon} />
+        <View style={[styles.indicatorLine, { backgroundColor: colors.systemRed, shadowColor: colors.systemRed }]} />
       </Animated.View>
 
       {/* CÁC NÚT BẤM (ROUTES) */}
@@ -57,9 +59,9 @@ function MotoTabBar({ state, descriptors, navigation }: any) {
 
         return (
           <TouchableOpacity key={route.key} onPress={onPress} style={styles.tabItem} activeOpacity={0.7}>
-            <Icon size={24} color={isFocused ? COLORS.primary : "#666"} style={{ marginBottom: 4 }} />
+            <Icon size={24} color={isFocused ? colors.systemRed : colors.secondaryLabel} style={{ marginBottom: 4 }} />
             <Text 
-              style={[styles.tabLabel, isFocused && { color: COLORS.primary, fontWeight: 'bold' }]}
+              style={[styles.tabLabel, { color: colors.secondaryLabel }, isFocused && { color: colors.systemRed, fontWeight: 'bold' }]}
               numberOfLines={1}
               adjustsFontSizeToFit
               allowFontScaling={false}
@@ -91,11 +93,9 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',
-    backgroundColor: '#0A0A0A',
     height: Platform.OS === 'ios' ? 85 : 70,
     paddingBottom: Platform.OS === 'ios' ? 20 : 0,
-    borderTopWidth: 1,
-    borderTopColor: '#222',
+    borderTopWidth: StyleSheet.hairlineWidth,
     position: 'relative', // Để xe có thể đè lên
   },
   tabItem: {
@@ -103,10 +103,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 15,
+    minHeight: HIGTouchTarget.min,
   },
   tabLabel: {
     fontSize: 10,
-    color: '#666',
   },
   // Style cho hiệu ứng xe chạy
   indicatorWrapper: {
@@ -124,9 +124,7 @@ const styles = StyleSheet.create({
   indicatorLine: {
     width: 30,
     height: 3,
-    backgroundColor: COLORS.primary,
     borderRadius: 3,
-    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.8,
     shadowRadius: 4,

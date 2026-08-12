@@ -7,8 +7,9 @@ import { useAppStore } from '../../store/useAppStore';
 import { deleteBike } from '../../services/bikeService';
 import { IBike } from '../../interfaces/bike';
 
+import { useColorScheme } from 'react-native';
 // Central Constants
-import { COLORS } from '../../constants/colors';
+import { HIGTheme, HIGSpacing, HIGTouchTarget, HIGTypography } from '../../constants/theme';
 
 // Modular Components
 import Showroom from '../../components/garage/Showroom';
@@ -21,6 +22,8 @@ import BikeEditor from '../../components/garage/BikeEditor';
 
 export default function GarageScreen() {
   const router = useRouter();
+  const theme = 'dark'; // Force dark mode for MotoTune
+  const colors = HIGTheme[theme];
 
   // Zustand Store
   const currentUser = useAppStore(state => state.currentUser);
@@ -130,34 +133,42 @@ export default function GarageScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.systemBackground }]}>
+      <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={colors.systemBackground} />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.separator }]}>
         <View style={styles.headerPlaceholder} />
-        <Text style={styles.headerTitle}>GARAGE</Text>
-        <TouchableOpacity onPress={() => router.push('/profile')}>
+        <Text style={[styles.headerTitle, { color: colors.label }]}>GARAGE</Text>
+        <TouchableOpacity onPress={() => router.push('/profile')} style={styles.headerAvatarBtn}>
           {currentUser?.photoURL ? (
-            <Image source={{ uri: currentUser.photoURL }} style={styles.headerAvatar} />
+            <Image source={{ uri: currentUser.photoURL }} style={[styles.headerAvatar, { borderColor: colors.separator }]} />
           ) : (
-            <User size={30} color={COLORS.primary} />
+            <User size={30} color={colors.systemRed} />
           )}
         </TouchableOpacity>
       </View>
 
       {/* Multiple Bikes Horizonal Switcher Bar */}
       {currentUser && bikes.length > 0 && garageStep === 0 && (
-        <View style={styles.bikeSelectorWrapper}>
+        <View style={[styles.bikeSelectorWrapper, { backgroundColor: colors.systemBackground, borderBottomColor: colors.separator }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bikeSelectorContent}>
             {bikes.map((b, index) => (
               <TouchableOpacity 
                 key={b.id || index.toString()} 
-                style={[styles.bikeTab, index === activeBikeIndex && styles.activeBikeTab]}
+                style={[
+                  styles.bikeTab, 
+                  { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator },
+                  index === activeBikeIndex && { backgroundColor: colors.systemRed, borderColor: colors.systemRed }
+                ]}
                 onPress={() => handleSwitchBike(index)}
               >
                 <Text 
-                  style={[styles.bikeTabText, index === activeBikeIndex && styles.activeBikeTabText]}
+                  style={[
+                    styles.bikeTabText, 
+                    { color: colors.secondaryLabel },
+                    index === activeBikeIndex && styles.activeBikeTabText
+                  ]}
                   numberOfLines={1}
                   allowFontScaling={false}
                 >
@@ -166,9 +177,9 @@ export default function GarageScreen() {
               </TouchableOpacity>
             ))}
             {bikes.length < 5 && (
-              <TouchableOpacity style={styles.addBikeTab} onPress={handlePressAddBike}>
-                <PlusCircle size={16} color={COLORS.primary} />
-                <Text style={styles.addBikeTabText}>Thêm xe</Text>
+              <TouchableOpacity style={[styles.addBikeTab, { borderColor: colors.systemRed, backgroundColor: theme === 'dark' ? '#2a1a1a' : '#fce8e8' }]} onPress={handlePressAddBike}>
+                <PlusCircle size={16} color={colors.systemRed} />
+                <Text style={[styles.addBikeTabText, { color: colors.systemRed }]}>Thêm xe</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -204,7 +215,7 @@ export default function GarageScreen() {
       {/* Main Content */}
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {loading ? (
-          <ActivityIndicator size="large" color={COLORS.primary} style={styles.loader} />
+          <ActivityIndicator size="large" color={colors.systemRed} style={styles.loader} />
         ) : (
           <>
             {bikeObj && garageStep === 0 && currentUser && (
@@ -235,13 +246,13 @@ export default function GarageScreen() {
 
                   {/* Action Buttons */}
                   <View style={styles.twinButtonsRow}>
-                    <TouchableOpacity style={styles.twinBtn} onPress={() => setShowHistory(true)}>
-                      <Map size={24} color="white" />
-                      <Text style={styles.twinBtnText}>HÀNH TRÌNH</Text>
+                    <TouchableOpacity style={[styles.twinBtn, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]} onPress={() => setShowHistory(true)}>
+                      <Map size={24} color={colors.label} />
+                      <Text style={[styles.twinBtnText, { color: colors.label }]}>HÀNH TRÌNH</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.twinBtnInfo} onPress={() => setShowLogbook(true)}>
-                      <BookOpen size={24} color={COLORS.info} />
-                      <Text style={styles.twinBtnTextInfo}>Y BẠ KỸ THUẬT</Text>
+                    <TouchableOpacity style={[styles.twinBtnInfo, { backgroundColor: theme === 'dark' ? '#1a2b3c' : '#e6f0fa', borderColor: colors.systemBlue }]} onPress={() => setShowLogbook(true)}>
+                      <BookOpen size={24} color={colors.systemBlue} />
+                      <Text style={[styles.twinBtnTextInfo, { color: colors.systemBlue }]}>Y BẠ KỸ THUẬT</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.footerSpacing} />
@@ -252,9 +263,9 @@ export default function GarageScreen() {
             {/* Empty State */}
             {bikes.length === 0 && garageStep === 0 && (
               <View style={styles.contentPadding}>
-                <TouchableOpacity style={styles.addBikeBtn} onPress={handlePressAddBike}>
-                  <PlusCircle size={50} color={COLORS.primary} style={styles.marginBottom10} />
-                  <Text style={styles.addBikeText}>THÊM XE VÀO GARAGE</Text>
+                <TouchableOpacity style={[styles.addBikeBtn, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]} onPress={handlePressAddBike}>
+                  <PlusCircle size={50} color={colors.systemRed} style={styles.marginBottom10} />
+                  <Text style={[styles.addBikeText, { color: colors.label }]}>THÊM XE VÀO GARAGE</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -276,7 +287,7 @@ export default function GarageScreen() {
 
       {/* Floating Action Button for AI Mechanic Chatbot */}
       <TouchableOpacity 
-        style={styles.fabBot} 
+        style={[styles.fabBot, { backgroundColor: colors.systemRed, shadowColor: colors.systemRed }]} 
         onPress={() => router.push('/ai-mechanic')} 
         activeOpacity={0.8}
       >
@@ -287,30 +298,30 @@ export default function GarageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#222', alignItems: 'center', marginTop: Platform.OS === 'android' ? 25 : 0 },
+  container: { flex: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, alignItems: 'center', marginTop: Platform.OS === 'android' ? 25 : 0 },
   headerPlaceholder: { width: 35 },
-  headerTitle: { color: COLORS.text, fontSize: 20, fontWeight: '900', letterSpacing: 2 },
-  headerAvatar: { width: 35, height: 35, borderRadius: 18, borderWidth: 1, borderColor: '#333' },
-  bikeSelectorWrapper: { backgroundColor: COLORS.bg, borderBottomWidth: 1, borderBottomColor: '#222' },
+  headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: 2 },
+  headerAvatarBtn: { minHeight: HIGTouchTarget.min, minWidth: HIGTouchTarget.min, alignItems: 'center', justifyContent: 'center' },
+  headerAvatar: { width: 35, height: 35, borderRadius: 18, borderWidth: 1 },
+  bikeSelectorWrapper: { borderBottomWidth: StyleSheet.hairlineWidth },
   bikeSelectorContent: { paddingHorizontal: 15, paddingVertical: 12, gap: 10, alignItems: 'center' },
-  bikeTab: { backgroundColor: '#1A1A1A', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
-  activeBikeTab: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  bikeTabText: { color: COLORS.textDim, fontSize: 13, fontWeight: 'bold' },
+  bikeTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, minHeight: HIGTouchTarget.min, justifyContent: 'center' },
+  bikeTabText: { fontSize: 13, fontWeight: 'bold' },
   activeBikeTabText: { color: 'white' },
-  addBikeTab: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(227, 27, 35, 0.1)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary, gap: 5 },
-  addBikeTabText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
+  addBikeTab: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, gap: 5, minHeight: HIGTouchTarget.min },
+  addBikeTabText: { fontSize: 13, fontWeight: 'bold' },
   scrollView: { flex: 1 },
   loader: { marginTop: 50 },
   contentPadding: { flex: 1, padding: 20, maxWidth: 600, width: '100%', alignSelf: 'center' },
-  addBikeBtn: { backgroundColor: COLORS.card, borderWidth: 2, borderColor: '#333', borderStyle: 'dashed', borderRadius: 20, padding: 40, alignItems: 'center', justifyContent: 'center', marginTop: 50 },
+  addBikeBtn: { borderWidth: 2, borderStyle: 'dashed', borderRadius: 20, padding: 40, alignItems: 'center', justifyContent: 'center', marginTop: 50, minHeight: HIGTouchTarget.min },
   marginBottom10: { marginBottom: 10 },
-  addBikeText: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
+  addBikeText: { fontSize: 18, fontWeight: 'bold' },
   twinButtonsRow: { flexDirection: 'row', gap: 12, marginBottom: 15 },
-  twinBtn: { flex: 1, backgroundColor: '#222', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#333' },
-  twinBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 1, textAlign: 'center' },
-  twinBtnInfo: { flex: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: COLORS.info },
-  twinBtnTextInfo: { color: COLORS.info, fontWeight: 'bold', fontSize: 14, letterSpacing: 1, textAlign: 'center' },
+  twinBtn: { flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 15, borderRadius: 15, borderWidth: 1, minHeight: HIGTouchTarget.min },
+  twinBtnText: { fontWeight: 'bold', fontSize: 14, letterSpacing: 1, textAlign: 'center' },
+  twinBtnInfo: { flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 15, borderRadius: 15, borderWidth: 1, minHeight: HIGTouchTarget.min },
+  twinBtnTextInfo: { fontWeight: 'bold', fontSize: 14, letterSpacing: 1, textAlign: 'center' },
   footerSpacing: { height: 100 },
-  fabBot: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#E31B23', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, zIndex: 999 }
+  fabBot: { position: 'absolute', bottom: Platform.OS === 'ios' ? 100 : 80, right: 20, width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, zIndex: 999 }
 });
