@@ -19,6 +19,35 @@ export const uploadToCloudinary = async (uri: string, type: 'image' | 'video' | 
   const resourceType = type === 'video' ? 'video' : 'image';
   const apiUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`;
 
+  // If uri is a Base64 data URI or remote HTTP/HTTPS URL, send directly via fetch
+  const isDataUriOrRemote = uri.startsWith('data:') || uri.startsWith('http://') || uri.startsWith('https://');
+
+  if (isDataUriOrRemote) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          file: uri,
+          upload_preset: UPLOAD_PRESET,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Cloudinary upload failed');
+      }
+      return result.secure_url;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   if (Platform.OS === 'web') {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
@@ -36,7 +65,7 @@ export const uploadToCloudinary = async (uri: string, type: 'image' | 'video' | 
       });
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.error?.message || "Web Cloudinary upload failed");
+        throw new Error(result.error?.message || 'Web Cloudinary upload failed');
       }
       return result.secure_url;
     } finally {
@@ -52,7 +81,7 @@ export const uploadToCloudinary = async (uri: string, type: 'image' | 'video' | 
     
     const result = JSON.parse(response.body);
     if (response.status !== 200) {
-      throw new Error(result.error?.message || "Cloudinary upload failed");
+      throw new Error(result.error?.message || 'Cloudinary upload failed');
     }
     return result.secure_url;
   }

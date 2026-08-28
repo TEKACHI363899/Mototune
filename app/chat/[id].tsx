@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 
 import { HIGTheme } from '../../constants/theme';
@@ -36,6 +37,7 @@ interface IChatMessage {
 }
 
 export default function ChatScreen() {
+  const insets = useSafeAreaInsets();
   const {
     id: otherUserId,
     name,
@@ -133,7 +135,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -198,7 +200,7 @@ export default function ChatScreen() {
           keyboardShouldPersistTaps="handled"
         />
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.input}
@@ -227,7 +229,7 @@ export default function ChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

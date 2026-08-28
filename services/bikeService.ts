@@ -12,11 +12,12 @@ import {
   limit,
   runTransaction,
 } from 'firebase/firestore';
-import { IBike } from '../interfaces/bike';
+import { IBike, IMaintenanceStatus, MaintenancePartKey } from '../interfaces/bike';
 import { IServiceLog } from '../interfaces/serviceLog';
 import { ITrip } from '../interfaces/trip';
 import { uploadToCloudinary } from './cloudinaryService';
 import { recordUserStat } from '../utils/badgeHelper';
+import { DEFAULT_MAINTENANCE_STATUS } from '../constants/garage';
 
 const REMOVE_BG_API_KEY = process.env.EXPO_PUBLIC_REMOVE_BG_API_KEY;
 
@@ -24,6 +25,52 @@ const verifyUserOwnership = (uid: string): void => {
   if (!auth.currentUser || auth.currentUser.uid !== uid) {
     throw new Error('UNAUTHORIZED_OPERATION');
   }
+};
+
+const isFiniteNumber = (val: unknown): val is number => {
+  return typeof val === 'number' && Number.isFinite(val) && !Number.isNaN(val);
+};
+
+/**
+ * Normalizes a maintenance object, filling missing keys with 0 and mapping legacy keys
+ */
+export const normalizeMaintenanceStatus = (
+  raw?: Partial<IMaintenanceStatus> | null,
+  legacyLastOil?: number
+): IMaintenanceStatus => {
+  const base = { ...DEFAULT_MAINTENANCE_STATUS };
+  if (!raw && typeof legacyLastOil !== 'number') return base;
+
+  const rawObj = raw || {};
+  const legacyBrakes = isFiniteNumber(rawObj.brakes) ? rawObj.brakes : 0;
+  const legacyOil = isFiniteNumber(rawObj.oil)
+    ? rawObj.oil
+    : (isFiniteNumber(legacyLastOil) ? legacyLastOil : 0);
+
+  return {
+    oil: isFiniteNumber(rawObj.oil) ? rawObj.oil : legacyOil,
+    oilFilter: isFiniteNumber(rawObj.oilFilter) ? rawObj.oilFilter : 0,
+    airFilter: isFiniteNumber(rawObj.airFilter) ? rawObj.airFilter : 0,
+    sparkPlug: isFiniteNumber(rawObj.sparkPlug) ? rawObj.sparkPlug : 0,
+    coolant: isFiniteNumber(rawObj.coolant) ? rawObj.coolant : 0,
+    fuelInjector: isFiniteNumber(rawObj.fuelInjector) ? rawObj.fuelInjector : 0,
+    chain: isFiniteNumber(rawObj.chain) ? rawObj.chain : 0,
+    belt: isFiniteNumber(rawObj.belt) ? rawObj.belt : 0,
+    clutch: isFiniteNumber(rawObj.clutch) ? rawObj.clutch : 0,
+    gearOil: isFiniteNumber(rawObj.gearOil) ? rawObj.gearOil : 0,
+    rollers: isFiniteNumber(rawObj.rollers) ? rawObj.rollers : 0,
+    frontBrake: isFiniteNumber(rawObj.frontBrake) ? rawObj.frontBrake : legacyBrakes,
+    rearBrake: isFiniteNumber(rawObj.rearBrake) ? rawObj.rearBrake : legacyBrakes,
+    brakeFluid: isFiniteNumber(rawObj.brakeFluid) ? rawObj.brakeFluid : 0,
+    brakeRotor: isFiniteNumber(rawObj.brakeRotor) ? rawObj.brakeRotor : 0,
+    frontTire: isFiniteNumber(rawObj.frontTire) ? rawObj.frontTire : 0,
+    frontFork: isFiniteNumber(rawObj.frontFork) ? rawObj.frontFork : 0,
+    rearShock: isFiniteNumber(rawObj.rearShock) ? rawObj.rearShock : 0,
+    steeringBearing: isFiniteNumber(rawObj.steeringBearing) ? rawObj.steeringBearing : 0,
+    battery: isFiniteNumber(rawObj.battery) ? rawObj.battery : 0,
+    headlight: isFiniteNumber(rawObj.headlight) ? rawObj.headlight : 0,
+    cables: isFiniteNumber(rawObj.cables) ? rawObj.cables : 0,
+  };
 };
 
 /**
@@ -57,18 +104,11 @@ export const saveBike = async (
 
     const newBike: IBike = {
       id: Date.now().toString(),
-      brand,
-      model,
-      nickname: nickname || model,
+      brand: (brand || '').trim(),
+      model: (model || '').trim(),
+      nickname: (nickname || '').trim() || model,
       odo: 0,
-      maintenance: {
-        oil: 0,
-        airFilter: 0,
-        sparkPlug: 0,
-        coolant: 0,
-        chain: 0,
-        brakes: 0,
-      },
+      maintenance: { ...DEFAULT_MAINTENANCE_STATUS },
     };
 
     bikes.push(newBike);
@@ -94,7 +134,8 @@ export const updateOdo = async (
   bikeObj: IBike,
   newOdo: number
 ): Promise<void> => {
-  await updateBike(uid, { ...bikeObj, odo: newOdo });
+  const sanitizedOdo = Math.max(0, Math.min(1000000, Math.floor(newOdo) || 0));
+  await updateBike(uid, { ...bikeObj, odo: sanitizedOdo });
 };
 
 /**
@@ -119,10 +160,19 @@ export const updateBike = async (
       bikes = [{ id: 'default', ...data.bike }];
     }
 
+    const normalizedBike: IBike = {
+      ...updatedBike,
+      odo: Math.max(0, Math.min(1000000, Math.floor(updatedBike.odo) || 0)),
+      maintenance: normalizeMaintenanceStatus(
+        updatedBike.maintenance,
+        updatedBike.lastOilChangeOdo
+      ),
+    };
+
     const updatedBikes = bikes.map((b) => {
       const bikeId = b.id || 'default';
-      if (bikeId === updatedBike.id) {
-        return updatedBike;
+      if (bikeId === normalizedBike.id) {
+        return normalizedBike;
       }
       return b;
     });
@@ -130,14 +180,123 @@ export const updateBike = async (
     const updateData: Record<string, unknown> = { bikes: updatedBikes };
 
     if (
-      bikes[activeIndex]?.id === updatedBike.id ||
-      (activeIndex === 0 && updatedBike.id === 'default')
+      bikes[activeIndex]?.id === normalizedBike.id ||
+      (activeIndex === 0 && normalizedBike.id === 'default')
     ) {
-      updateData.bike = updatedBike;
+      updateData.bike = normalizedBike;
     }
 
     transaction.set(userDocRef, updateData, { merge: true });
   });
+};
+
+export interface IReplaceMaintenancePartParams {
+  bikeId: string;
+  partId: MaintenancePartKey | string;
+  partName: string;
+  price: number;
+  note: string;
+  odoAtService?: number;
+}
+
+/**
+ * Atomically updates a bike's maintenance status ODO and adds a service log
+ */
+export const replaceMaintenancePart = async (
+  uid: string,
+  params: IReplaceMaintenancePartParams
+): Promise<{ updatedBike: IBike; logId: string }> => {
+  verifyUserOwnership(uid);
+
+  const sanitizedPrice = Math.max(0, Math.min(500000000, Math.floor(params.price) || 0));
+  const sanitizedNote = (params.note || '').replace(/[<>'"]/g, '').trim().slice(0, 250);
+  const sanitizedPartName = (params.partName || '').replace(/[<>'"]/g, '').trim().slice(0, 100);
+
+  const userDocRef = doc(db, 'users', uid);
+  const newLogRef = doc(collection(db, 'users', uid, 'service_logs'));
+
+  let resultBike: IBike | null = null;
+
+  await runTransaction(db, async (transaction) => {
+    const userDoc = await transaction.get(userDocRef);
+    if (!userDoc.exists()) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    const data = userDoc.data();
+    let bikes = (data.bikes as IBike[]) || [];
+    const activeIndex = data.activeBikeIndex ?? 0;
+
+    if (bikes.length === 0 && data.bike) {
+      bikes = [{ id: 'default', ...data.bike }];
+    }
+
+    const targetIndex = bikes.findIndex((b) => (b.id || 'default') === params.bikeId);
+    if (targetIndex === -1) {
+      throw new Error('BIKE_NOT_FOUND');
+    }
+
+    const targetBike = bikes[targetIndex];
+    const serviceOdo = typeof params.odoAtService === 'number'
+      ? Math.max(0, Math.min(1000000, Math.floor(params.odoAtService)))
+      : Math.max(0, Math.floor(targetBike.odo) || 0);
+
+    const normalizedMaintenance = normalizeMaintenanceStatus(
+      targetBike.maintenance,
+      targetBike.lastOilChangeOdo
+    );
+
+    const updatedMaintenance: IMaintenanceStatus = {
+      ...normalizedMaintenance,
+      [params.partId]: serviceOdo,
+    };
+
+    const updatedBike: IBike = {
+      ...targetBike,
+      odo: Math.max(targetBike.odo || 0, serviceOdo),
+      maintenance: updatedMaintenance,
+      ...(params.partId === 'oil' ? { lastOilChangeOdo: serviceOdo } : {}),
+    };
+
+    bikes[targetIndex] = updatedBike;
+
+    const newLog: IServiceLog = {
+      id: newLogRef.id,
+      bikeId: params.bikeId,
+      part: sanitizedPartName,
+      partKey: params.partId as MaintenancePartKey,
+      price: sanitizedPrice,
+      note: sanitizedNote,
+      createdAt: Date.now(),
+      odoAtService: serviceOdo,
+    };
+
+    transaction.set(newLogRef, newLog);
+
+    const updatePayload: Record<string, unknown> = { bikes };
+    if (
+      bikes[activeIndex]?.id === updatedBike.id ||
+      (activeIndex === 0 && updatedBike.id === 'default')
+    ) {
+      updatePayload.bike = updatedBike;
+    }
+
+    transaction.set(userDocRef, updatePayload, { merge: true });
+    resultBike = updatedBike;
+  });
+
+  if (!resultBike) {
+    throw new Error('TRANSACTION_FAILED');
+  }
+
+  try {
+    await recordUserStat(uid, 'rich_biker', sanitizedPrice);
+    await recordUserStat(uid, 'custom_tuner', 1);
+  } catch (statError) {
+    console.error('Failed to update user badges:', statError);
+  }
+
+  return { updatedBike: resultBike, logId: newLogRef.id };
 };
 
 /**
@@ -148,9 +307,17 @@ export const addServiceLog = async (
   log: Omit<IServiceLog, 'id'>
 ): Promise<string> => {
   verifyUserOwnership(uid);
+  const sanitizedLog = {
+    ...log,
+    part: (log.part || '').replace(/[<>'"]/g, '').trim().slice(0, 100),
+    price: Math.max(0, Math.min(500000000, Math.floor(log.price) || 0)),
+    note: (log.note || '').replace(/[<>'"]/g, '').trim().slice(0, 250),
+    odoAtService: Math.max(0, Math.min(1000000, Math.floor(log.odoAtService) || 0)),
+    createdAt: log.createdAt || Date.now(),
+  };
   const docRef = await addDoc(
     collection(db, 'users', uid, 'service_logs'),
-    log
+    sanitizedLog
   );
   return docRef.id;
 };
@@ -187,7 +354,7 @@ export const fetchTripHistory = async (
  */
 export const fetchServiceLogs = async (
   uid: string,
-  limitCount = 20
+  limitCount = 50
 ): Promise<IServiceLog[]> => {
   const q = query(
     collection(db, 'users', uid, 'service_logs'),
@@ -213,11 +380,14 @@ export const handleUploadCutoutAndSave = async (
     throw new Error('Remove.bg API Key is not configured correctly in .env.');
   }
 
+  // Remove potential data URI prefix if present so remove.bg receives raw base64
+  const rawBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
+
   if (onStatusChange) onStatusChange('A.I đang tách nền...');
   const removeBgUrl = 'https://api.remove.bg/v1.0/removebg';
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
   try {
     const responseRemoveBg = await fetch(removeBgUrl, {
@@ -229,20 +399,28 @@ export const handleUploadCutoutAndSave = async (
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        image_file_b64: base64Image,
+        image_file_b64: rawBase64,
         size: 'auto',
       }),
     });
 
     if (!responseRemoveBg.ok) {
-      const errData = await responseRemoveBg.json();
-      throw new Error(
-        errData.errors?.[0]?.title || 'Remove.bg API rejected the image.'
-      );
+      let errorMessage = 'Remove.bg API rejected the image.';
+      try {
+        const errData = await responseRemoveBg.json();
+        errorMessage = errData.errors?.[0]?.title || errData.message || errorMessage;
+      } catch {
+        errorMessage = `Remove.bg error (Status ${responseRemoveBg.status})`;
+      }
+      throw new Error(errorMessage);
     }
 
     const dataRemoveBg = await responseRemoveBg.json();
-    const cutoutBase64 = dataRemoveBg.data.result_b64;
+    const cutoutBase64 = dataRemoveBg.data?.result_b64;
+
+    if (!cutoutBase64) {
+      throw new Error('Không nhận được dữ liệu ảnh tách nền từ server A.I');
+    }
 
     if (onStatusChange) onStatusChange('Đang tải lên mây...');
     const cloudinaryUrl = await uploadToCloudinary(
@@ -295,4 +473,5 @@ export const deleteBike = async (uid: string, bikeId: string): Promise<void> => 
     transaction.set(userDocRef, updateData, { merge: true });
   });
 };
+
 

@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   CameraView,
@@ -59,6 +60,7 @@ type Message = {
 
 export default function AIMechanicScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [bikeContext, setBikeContext] = useState("");
@@ -289,7 +291,7 @@ export default function AIMechanicScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       <Modal
         visible={isCameraVisible}
         animationType="slide"
@@ -386,7 +388,7 @@ export default function AIMechanicScreen() {
           </View>
         )}
 
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {Platform.OS !== "web" && (
             <TouchableOpacity
               style={styles.camTriggerBtn}
@@ -415,7 +417,7 @@ export default function AIMechanicScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

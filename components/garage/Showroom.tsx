@@ -26,7 +26,7 @@ export default function Showroom({ bikeObj, uid, onBikeUpdated, onChangeBikeRequ
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert("Lỗi", "Cần quyền truy cập Thư viện ảnh!");
+        Alert.alert('Lỗi', 'Cần quyền truy cập Thư viện ảnh!');
         return;
       }
 
@@ -37,26 +37,45 @@ export default function Showroom({ bikeObj, uid, onBikeUpdated, onChangeBikeRequ
         base64: true,
       });
 
-      if (!result.canceled && result.assets[0].base64) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        let base64Data = asset.base64;
+
+        if (!base64Data && asset.uri) {
+          try {
+            const FileSystem = await import('expo-file-system/legacy');
+            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+          } catch (readError) {
+            console.error('Failed to read image as base64:', readError);
+          }
+        }
+
+        if (!base64Data) {
+          Alert.alert('Lỗi', 'Không thể đọc dữ liệu ảnh. Vui lòng thử chọn lại ảnh khác.');
+          return;
+        }
+
         setIsUploadingCutout(true);
         setUploadStatus('Bắt đầu...');
 
         const secureUrl = await handleUploadCutoutAndSave(
           uid,
           bikeObj,
-          result.assets[0].base64,
+          base64Data,
           (statusText) => setUploadStatus(statusText)
         );
 
         onBikeUpdated({ ...bikeObj, aiCutoutUrl: secureUrl });
         setUploadStatus('Xong!');
         setTimeout(() => {
-          Alert.alert("Thành công", "Đã cập nhật ảnh xe thực tế của bạn!");
+          Alert.alert('Thành công', 'Đã cập nhật ảnh xe thực tế của bạn!');
         }, 500);
       }
     } catch (error: any) {
-      console.error("Upload error:", error);
-      Alert.alert("Lỗi", `Không thể cập nhật ảnh: ${error.message}`);
+      console.error('Upload error:', error);
+      Alert.alert('Lỗi', `Không thể cập nhật ảnh: ${error.message || error}`);
     } finally {
       setIsUploadingCutout(false);
       setUploadStatus('');

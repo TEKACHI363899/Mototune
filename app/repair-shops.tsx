@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
@@ -53,6 +54,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function RepairShopsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const theme = 'dark';
   const colors = HIGTheme[theme];
   const currentUser = auth.currentUser;
@@ -270,11 +272,11 @@ export default function RepairShopsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.systemBackground }]}>
+    <View style={[styles.root, { backgroundColor: colors.systemBackground }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.systemBackground} />
 
       {/* Top Floating Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { top: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={[styles.iconButton, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]}
@@ -520,7 +522,7 @@ export default function RepairShopsScreen() {
         onClose={() => setAddModalVisible(false)}
         onSubmit={handleAddCommunityShop}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -530,7 +532,6 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 20,
     left: 16,
     right: 16,
     zIndex: 15,

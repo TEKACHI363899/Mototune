@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, User, Check, X, Bell, UserPlus, Heart, MessageCircle, CheckCheck } from 'lucide-react-native';
 import { auth } from '../firebaseConfig';
@@ -29,6 +31,7 @@ import { HIGTheme, HIGSpacing, HIGTouchTarget } from '../constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const theme = 'dark';
   const colors = HIGTheme[theme];
   const currentUser = auth.currentUser;
@@ -128,9 +131,9 @@ export default function NotificationsScreen() {
               <User size={20} color={colors.secondaryLabel} />
             </View>
           )}
-          <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: colors.label }]}>{senderInfo.displayName}</Text>
-            <Text style={[styles.subText, { color: colors.secondaryLabel }]}>Đã gửi lời mời kết bạn</Text>
+          <View style={[styles.userInfo, { flex: 1, marginRight: 8 }]}>
+            <Text style={[styles.userName, { color: colors.label }]} numberOfLines={1}>{senderInfo.displayName}</Text>
+            <Text style={[styles.subText, { color: colors.secondaryLabel }]} numberOfLines={1}>Đã gửi lời mời kết bạn</Text>
           </View>
         </TouchableOpacity>
 
@@ -195,7 +198,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.systemBackground }]}>
+    <View style={[styles.container, { backgroundColor: colors.systemBackground, paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.systemBackground} />
 
       {/* Header */}
@@ -280,7 +283,7 @@ export default function NotificationsScreen() {
           />
         )
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

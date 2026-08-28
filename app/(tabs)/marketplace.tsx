@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video as ExpoVideo, ResizeMode } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -70,6 +71,7 @@ import {
   confirmDeliveryAndReleasePayout,
   openOrderDispute,
   cancelOrderAndReleaseProduct,
+  deleteMarketplaceOrder,
   subscribeUserOrders,
 } from '../../services/marketplaceService';
 import {
@@ -106,6 +108,7 @@ const CONDITIONS: { label: string; value: TProductCondition | 'all' }[] = [
 
 export default function MarketplaceScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
   const [activeTab, setActiveTab] = useState<'market' | 'orders'>('market');
   const [orderSubTab, setOrderSubTab] = useState<'buying' | 'selling'>('buying');
@@ -238,11 +241,11 @@ export default function MarketplaceScreen() {
 
   if (!currentUser || currentUser.isAnonymous) {
     return (
-      <SafeAreaView style={styles.blockedContainer}>
+      <View style={[styles.blockedContainer, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.blockedIconCircle}>
-          <Lock size={50} color={COLORS.primary} />
+          <Lock size={44} color={COLORS.primary} />
         </View>
-        <Text style={styles.blockedTitle}>KHU VỰC GIAO DỊCH BIKER</Text>
+        <Text style={styles.blockedTitle}>CẦN ĐĂNG NHẬP ĐỂ VÀO CHỢ</Text>
         <Text style={styles.blockedSub}>
           Chợ MotoTune là không gian mua bán bảo mật có ký quỹ Escrow. Vui lòng đăng
           nhập tài khoản để trải nghiệm!
@@ -254,7 +257,7 @@ export default function MarketplaceScreen() {
         >
           <Text style={styles.loginBtnText}>ĐI TỚI ĐĂNG NHẬP</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -344,8 +347,9 @@ export default function MarketplaceScreen() {
       });
       loadProducts();
       Alert.alert('Hoàn tất', 'Sản phẩm của bạn đã được đưa lên kệ Chợ Biker!');
-    } catch (error) {
-      Alert.alert('Lỗi', 'Không thể đăng sản phẩm lúc này.');
+    } catch (error: any) {
+      console.error('[handlePostProduct Error]', error);
+      Alert.alert('Lỗi đăng bán', error?.message || 'Không thể đăng sản phẩm lúc này.');
     } finally {
       setIsUploading(false);
     }
@@ -525,6 +529,24 @@ export default function MarketplaceScreen() {
     }
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      await cancelOrderAndReleaseProduct(orderId);
+      Alert.alert('Thành công', 'Đã hủy đơn hàng và mở lại món đồ trên sàn.');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.message || 'Không thể hủy đơn hàng lúc này.');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    try {
+      await deleteMarketplaceOrder(orderId);
+      Alert.alert('Thành công', 'Đã xóa bản ghi đơn hàng khỏi lịch sử.');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.message || 'Không thể xóa đơn hàng lúc này.');
+    }
+  };
+
   const renderProductItem = ({ item }: { item: IProduct }) => {
     const isOwner = currentUser?.uid === item.authorId;
     const mediaCount = item.mediaUrls?.length || 1;
@@ -564,7 +586,7 @@ export default function MarketplaceScreen() {
             {item.title}
           </Text>
           <Text style={styles.productPrice}>
-            {item.price.toLocaleString('vi-VN')} đ
+            {((item.price ?? 0)).toLocaleString('vi-VN')} đ
           </Text>
 
           <View style={styles.sellerRow}>
@@ -602,6 +624,7 @@ export default function MarketplaceScreen() {
   const renderOrderItem = ({ item }: { item: IOrder }) => {
     const isBuyer = currentUser?.uid === item.buyerId;
     const partnerName = isBuyer ? item.sellerName : item.buyerName;
+    const priceToDisplay = (item.totalAmount ?? item.productPrice) ?? 0;
 
     return (
       <View style={styles.orderCard}>
@@ -626,21 +649,25 @@ export default function MarketplaceScreen() {
             </View>
           </View>
           <Text style={styles.orderDate}>
-            {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+            {new Date(item.createdAt || Date.now()).toLocaleDateString('vi-VN')}
           </Text>
         </View>
 
         <View style={styles.orderBody}>
-          <Image source={{ uri: item.productImage }} style={styles.orderImg} />
+          {item.productImage ? (
+            <Image source={{ uri: item.productImage }} style={styles.orderImg} />
+          ) : (
+            <View style={[styles.orderImg, { backgroundColor: '#333' }]} />
+          )}
           <View style={{ flex: 1 }}>
             <Text style={styles.oTitle} numberOfLines={1}>
-              {item.productTitle}
+              {item.productTitle || 'Sản phẩm giao dịch'}
             </Text>
             <Text style={styles.oPrice}>
-              {item.totalAmount.toLocaleString('vi-VN')} đ
+              {priceToDisplay.toLocaleString('vi-VN')} đ
             </Text>
             <Text style={styles.oPartner}>
-              Đối tác: <Text style={{ color: 'white' }}>{partnerName}</Text>
+              Đối tác: <Text style={{ color: 'white' }}>{partnerName || 'Biker'}</Text>
             </Text>
           </View>
         </View>
@@ -659,20 +686,28 @@ export default function MarketplaceScreen() {
           {item.status === 'pending_payment' && (
             <>
               <Text style={styles.statusWarning}>Chờ thanh toán Escrow</Text>
-              {isBuyer ? (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
-                  style={styles.oActionBtn}
-                  onPress={() => {
-                    setActivePaymentOrder(item);
-                    setShowPaymentModal(true);
-                  }}
+                  style={[styles.oActionBtn, { backgroundColor: '#333' }]}
+                  onPress={() => handleCancelOrder(item.id)}
                 >
-                  <CreditCard size={14} color="white" />
-                  <Text style={styles.oActionText}>Thanh Toán</Text>
+                  <X size={14} color={COLORS.textDim} />
+                  <Text style={[styles.oActionText, { color: COLORS.textDim }]}>Hủy Đơn</Text>
                 </TouchableOpacity>
-              ) : (
-                <Text style={styles.statusSub}>Chờ khách chuyển tiền</Text>
-              )}
+
+                {isBuyer && (
+                  <TouchableOpacity
+                    style={styles.oActionBtn}
+                    onPress={() => {
+                      setActivePaymentOrder(item);
+                      setShowPaymentModal(true);
+                    }}
+                  >
+                    <CreditCard size={14} color="white" />
+                    <Text style={styles.oActionText}>Thanh Toán</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
           )}
 
@@ -755,16 +790,25 @@ export default function MarketplaceScreen() {
           {item.status === 'completed' && (
             <>
               <Text style={styles.statusSafe}>Giao dịch thành công</Text>
-              <TouchableOpacity
-                style={[styles.oActionBtn, { backgroundColor: '#333' }]}
-                onPress={() => {
-                  setReviewTargetOrder(item);
-                  setShowReviewModal(true);
-                }}
-              >
-                <Star size={14} color={COLORS.warning} />
-                <Text style={styles.oActionText}>Đánh giá</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.oActionBtn, { backgroundColor: '#222' }]}
+                  onPress={() => handleDeleteOrder(item.id)}
+                >
+                  <Trash2 size={13} color={COLORS.textDim} />
+                  <Text style={[styles.oActionText, { color: COLORS.textDim }]}>Xóa</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.oActionBtn, { backgroundColor: '#333' }]}
+                  onPress={() => {
+                    setReviewTargetOrder(item);
+                    setShowReviewModal(true);
+                  }}
+                >
+                  <Star size={14} color={COLORS.warning} />
+                  <Text style={styles.oActionText}>Đánh giá</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
 
@@ -773,7 +817,16 @@ export default function MarketplaceScreen() {
           )}
 
           {item.status === 'cancelled' && (
-            <Text style={styles.statusDim}>Đã hủy đơn hàng</Text>
+            <>
+              <Text style={styles.statusDim}>Đã hủy đơn hàng</Text>
+              <TouchableOpacity
+                style={[styles.oActionBtn, { backgroundColor: '#222' }]}
+                onPress={() => handleDeleteOrder(item.id)}
+              >
+                <Trash2 size={13} color={COLORS.textDim} />
+                <Text style={[styles.oActionText, { color: COLORS.textDim }]}>Xóa bản ghi</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -787,7 +840,7 @@ export default function MarketplaceScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       {/* HEADER TABS */}
       <View style={styles.header}>
         <View style={styles.tabContainer}>
@@ -1059,7 +1112,7 @@ export default function MarketplaceScreen() {
                 <View style={styles.priceRow}>
                   <Text style={styles.detailTitle}>{viewProduct.title}</Text>
                   <Text style={styles.detailPrice}>
-                    {viewProduct.price.toLocaleString('vi-VN')} đ
+                    {((viewProduct.price ?? 0)).toLocaleString('vi-VN')} đ
                   </Text>
                 </View>
 
@@ -1607,7 +1660,7 @@ export default function MarketplaceScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1778,7 +1831,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 2,
   },
-  productTitle: { color: 'white', fontSize: 13, fontWeight: 'bold', height: 36 },
+  productTitle: { color: 'white', fontSize: 13, fontWeight: 'bold', minHeight: 34, lineHeight: 17 },
   productPrice: { color: COLORS.safe, fontSize: 15, fontWeight: '900', marginTop: 4 },
   sellerRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   sellerName: { color: COLORS.textDim, fontSize: 11, flex: 1 },
@@ -1821,15 +1874,16 @@ const styles = StyleSheet.create({
     borderColor: '#222',
     paddingBottom: 8,
     marginBottom: 10,
+    gap: 8,
   },
-  orderTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  orderTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   orderRole: { color: COLORS.primary, fontWeight: '900', fontSize: 12 },
   deliveryBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   stationBadge: { backgroundColor: 'rgba(227, 27, 35, 0.15)' },
   shippingBadge: { backgroundColor: 'rgba(59, 130, 246, 0.15)' },
   deliveryBadgeText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-  orderDate: { color: COLORS.textDim, fontSize: 11 },
-  orderBody: { flexDirection: 'row', gap: 12, marginBottom: 10 },
+  orderDate: { color: COLORS.textDim, fontSize: 11, flexShrink: 0 },
+  orderBody: { flexDirection: 'row', gap: 12, marginBottom: 10, alignItems: 'center' },
   orderImg: { width: 55, height: 55, borderRadius: 8, backgroundColor: '#222' },
   oTitle: { color: 'white', fontSize: 14, fontWeight: 'bold' },
   oPrice: { color: COLORS.safe, fontSize: 14, fontWeight: '900', marginTop: 2 },
@@ -1848,13 +1902,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     borderTopWidth: 1,
     borderColor: '#222',
     paddingTop: 10,
   },
-  statusWarning: { color: COLORS.warning, fontSize: 12, fontWeight: 'bold' },
-  statusSafe: { color: COLORS.safe, fontSize: 12, fontWeight: 'bold' },
-  statusInfo: { color: COLORS.info, fontSize: 12, fontWeight: 'bold' },
+  statusWarning: { color: COLORS.warning, fontSize: 12, fontWeight: 'bold', flexShrink: 1 },
+  statusSafe: { color: COLORS.safe, fontSize: 12, fontWeight: 'bold', flexShrink: 1 },
+  statusInfo: { color: COLORS.info, fontSize: 12, fontWeight: 'bold', flexShrink: 1 },
   statusSub: { color: COLORS.textDim, fontSize: 11 },
   statusDim: { color: '#666', fontSize: 12 },
   oActionBtn: {

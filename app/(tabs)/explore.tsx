@@ -5,6 +5,7 @@ import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, increment,
 import { Flame, MessageCircle, MoreHorizontal, Plus, Send, Trash2, X, Search, Bell } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 
 import UserBadge from '../../components/UserBadge';
@@ -111,21 +112,25 @@ const PostCard = ({ item, onComment, router }: IPostCardProps) => {
   return (
     <View style={styles.postContainer}>
       <View style={styles.postHeader}>
-        <TouchableOpacity style={styles.headerLeft} onPress={handleUserClick}>
+        <TouchableOpacity style={styles.headerLeft} onPress={handleUserClick} activeOpacity={0.8}>
           {item.authorAvatar ? <Image source={{ uri: item.authorAvatar }} style={styles.avatar} /> : <View style={[styles.avatar, {backgroundColor: '#333'}]} />}
-          <View>
-             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-               <Text style={styles.authorName}>{item.authorName}</Text>
+          <View style={{ flex: 1, marginRight: 8 }}>
+             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+               <Text style={styles.authorName} numberOfLines={1}>{item.authorName}</Text>
                <UserBadge userId={item.authorId} size={14} />
              </View>
-             {item.isShared && <Text style={styles.sharedTag}>Shared via {item.sharedFromStr}</Text>}
+             {item.isShared && <Text style={styles.sharedTag} numberOfLines={1}>Shared via {item.sharedFromStr}</Text>}
           </View>
         </TouchableOpacity>
         
         {isOwner ? (
-          <TouchableOpacity onPress={handleDeletePost}><Trash2 size={20} color="#EF4444" /></TouchableOpacity>
+          <TouchableOpacity onPress={handleDeletePost} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Trash2 size={18} color="#EF4444" />
+          </TouchableOpacity>
         ) : (
-          <TouchableOpacity><MoreHorizontal size={20} color={COLORS.textDim} /></TouchableOpacity>
+          <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <MoreHorizontal size={20} color={COLORS.textDim} />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -166,16 +171,15 @@ const PostCard = ({ item, onComment, router }: IPostCardProps) => {
 
 export default function ExploreScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<IPost[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
-
   const [activePostForComment, setActivePostForComment] = useState<IPost | null>(null);
   const [comments, setComments] = useState<IComment[]>([]);
   const [newComment, setNewComment] = useState('');
-
-  const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
+  const [users, setUsers] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
@@ -292,14 +296,14 @@ export default function ExploreScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-      <View style={styles.appHeaderWrapper}>
+      <View style={[styles.appHeaderWrapper, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
         <View style={styles.appHeader}>
           <Text style={styles.headerLogo}>MOTO<Text style={{color: COLORS.primary}}>TUNE</Text></Text>
           <View style={{flexDirection: 'row', gap: 16, alignItems: 'center'}}>
             <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerNotifBtn}>
-              <Bell size={26} color={COLORS.text} />
+              <Bell size={24} color={COLORS.text} />
               {unreadNotifs > 0 && (
                 <View style={styles.notifBadge}>
                   <Text style={styles.notifBadgeText}>
@@ -308,14 +312,18 @@ export default function ExploreScreen() {
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/create-post')}><Plus size={28} color={COLORS.text} /></TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/inbox' as any)}><MessageCircle size={28} color={COLORS.text} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/create-post')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Plus size={26} color={COLORS.text} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/inbox' as any)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <MessageCircle size={26} color={COLORS.text} />
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.searchBarContainer}>
           <View style={styles.searchInner}>
-            <Search size={18} color={COLORS.textDim} style={styles.searchIcon} />
+            <Search size={16} color={COLORS.textDim} style={styles.searchIcon} />
             <TextInput 
               style={styles.searchInput}
               placeholder="Tìm kiếm bài viết hoặc biker..."
@@ -340,7 +348,7 @@ export default function ExploreScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (<PostCard item={item} onComment={(post) => setActivePostForComment(post)} router={router} />)}
           ListHeaderComponent={renderBikersList}
-          contentContainerStyle={{ paddingBottom: 20, maxWidth: 600, width: '100%', alignSelf: 'center' }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 80, maxWidth: 600, width: '100%', alignSelf: 'center' }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -350,7 +358,7 @@ export default function ExploreScreen() {
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setActivePostForComment(null)} activeOpacity={1} />
           
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={styles.bottomSheet}>
+            <View style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
               
               <View style={styles.sheetHeader}>
                 <View style={{width: 24}} />
@@ -400,13 +408,13 @@ export default function ExploreScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  appHeaderWrapper: { width: '100%', borderBottomWidth: 1, borderBottomColor: '#222', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 25) : 0, backgroundColor: COLORS.bg },
+  appHeaderWrapper: { width: '100%', borderBottomWidth: 1, borderBottomColor: '#222', backgroundColor: COLORS.bg },
   appHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, maxWidth: 600, width: '100%', alignSelf: 'center' },
   headerLogo: { color: COLORS.text, fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
   headerNotifBtn: { position: 'relative', padding: 4, justifyContent: 'center', alignItems: 'center' },

@@ -137,7 +137,7 @@ export const DisputeModal: React.FC<IDisputeModalProps> = ({
           <View style={styles.alertBanner}>
             <ShieldAlert size={20} color={COLORS.warning} style={{ marginTop: 2 }} />
             <Text style={styles.alertBannerText}>
-              Khi gửi khiếu nại, tiền đơn hàng ({order.totalAmount.toLocaleString('vi-VN')} đ)
+              Khi gửi khiếu nại, tiền đơn hàng ({((order?.totalAmount ?? order?.productPrice) ?? 0).toLocaleString('vi-VN')} đ)
               sẽ được MotoTune đóng băng ngay lập tức. Người bán có 72 giờ để phản hồi.
             </Text>
           </View>

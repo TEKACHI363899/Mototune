@@ -3,6 +3,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { IBike } from '../interfaces/bike';
+import { normalizeMaintenanceStatus } from '../services/bikeService';
 
 interface IAppState {
   currentUser: FirebaseUser | null;
@@ -58,6 +59,11 @@ export const useAppStore = create<IAppState>((set, get) => {
                   activeBikeIndex: activeIdx 
                 }, { merge: true });
               }
+
+              userBikes = userBikes.map((bike) => ({
+                ...bike,
+                maintenance: normalizeMaintenanceStatus(bike.maintenance, bike.lastOilChangeOdo),
+              }));
 
               set({ bikes: userBikes, activeBikeIndex: activeIdx, loading: false });
             } else {

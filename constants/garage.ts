@@ -1,5 +1,30 @@
-import { Droplet, Disc, Wind, Zap, Settings, Thermometer } from 'lucide-react-native';
-import { IMaintenancePart } from '../interfaces/bike';
+import {
+  Droplet,
+  Filter,
+  Wind,
+  Zap,
+  Thermometer,
+  Settings,
+  Repeat,
+  Disc,
+  Fuel,
+  ShieldAlert,
+  CircleDot,
+  Droplets,
+  Activity,
+  Sliders,
+  Compass,
+  BatteryCharging,
+  Lightbulb,
+  Cpu,
+  Wrench,
+  Gauge,
+} from 'lucide-react-native';
+import {
+  IMaintenancePart,
+  IMaintenanceStatus,
+  IMaintenanceCategoryMeta,
+} from '../interfaces/bike';
 
 export interface IBikeCategory {
   categoryName: string;
@@ -153,11 +178,234 @@ export const BIKE_DATA: Record<string, IBikeCategory[]> = {
 
 export const BRANDS: string[] = Object.keys(BIKE_DATA);
 
-export const MAINTENANCE_PARTS: IMaintenancePart[] = [
-  { id: 'oil', name: 'Nhớt máy', interval: 2000, icon: Droplet },
-  { id: 'brakes', name: 'Bố thắng', interval: 10000, icon: Disc },
-  { id: 'airFilter', name: 'Lọc gió', interval: 10000, icon: Wind },
-  { id: 'sparkPlug', name: 'Bugi', interval: 10000, icon: Zap },
-  { id: 'chain', name: 'Sên dĩa (NSD)', interval: 15000, icon: Settings },
-  { id: 'coolant', name: 'Nước mát', interval: 15000, icon: Thermometer },
+export const DEFAULT_MAINTENANCE_STATUS: IMaintenanceStatus = {
+  oil: 0,
+  oilFilter: 0,
+  airFilter: 0,
+  sparkPlug: 0,
+  coolant: 0,
+  fuelInjector: 0,
+  chain: 0,
+  belt: 0,
+  clutch: 0,
+  gearOil: 0,
+  rollers: 0,
+  frontBrake: 0,
+  rearBrake: 0,
+  brakeFluid: 0,
+  brakeRotor: 0,
+  frontTire: 0,
+  rearTire: 0,
+  frontFork: 0,
+  rearShock: 0,
+  steeringBearing: 0,
+  battery: 0,
+  headlight: 0,
+  cables: 0,
+};
+
+export const MAINTENANCE_CATEGORIES: IMaintenanceCategoryMeta[] = [
+  { key: 'all', label: 'Tất cả', icon: Wrench },
+  { key: 'engine', label: 'Động cơ & Dung dịch', icon: Gauge },
+  { key: 'transmission', label: 'Hệ thống truyền động', icon: Settings },
+  { key: 'brakes_tires', label: 'Phanh & Lốp xe', icon: ShieldAlert },
+  { key: 'chassis_suspension', label: 'Khung gầm & Giảm xóc', icon: Compass },
+  { key: 'electrical', label: 'Hệ thống điện & Phụ trợ', icon: BatteryCharging },
 ];
+
+export const MAINTENANCE_PARTS: IMaintenancePart[] = [
+  // 1. Động cơ & Dung dịch (Engine & Fluids)
+  {
+    id: 'oil',
+    name: 'Nhớt máy',
+    category: 'engine',
+    interval: 2000,
+    icon: Droplet,
+    description: 'Bôi trơn, làm mát và làm sạch các chi tiết động cơ.',
+  },
+  {
+    id: 'oilFilter',
+    name: 'Lọc nhớt',
+    category: 'engine',
+    interval: 6000,
+    icon: Filter,
+    description: 'Lọc cặn bẩn kim loại trong dòng tuần hoàn nhớt.',
+  },
+  {
+    id: 'airFilter',
+    name: 'Lọc gió',
+    category: 'engine',
+    interval: 10000,
+    icon: Wind,
+    description: 'Lọc bụi bẩn không khí trước khi vào buồng đốt.',
+  },
+  {
+    id: 'sparkPlug',
+    name: 'Bugi đánh lửa',
+    category: 'engine',
+    interval: 10000,
+    icon: Zap,
+    description: 'Tạo tia lửa điện đốt cháy hòa khí trong buồng đốt.',
+  },
+  {
+    id: 'coolant',
+    name: 'Nước làm mát',
+    category: 'engine',
+    interval: 15000,
+    icon: Thermometer,
+    description: 'Ổn định nhiệt độ làm việc của buồng đốt động cơ làm mát bằng dung dịch.',
+  },
+  {
+    id: 'fuelInjector',
+    name: 'Kim phun & Họng xăng',
+    category: 'engine',
+    interval: 12000,
+    icon: Fuel,
+    description: 'Làm sạch cặn cacbon kim phun xăng điện tử và buồng đốt.',
+  },
+
+  // 2. Hệ thống truyền động (Drivetrain & Transmission)
+  {
+    id: 'chain',
+    name: 'Nhông sên dĩa (NSD)',
+    category: 'transmission',
+    interval: 15000,
+    icon: Settings,
+    description: 'Truyền động lực từ động cơ tới bánh sau xe số và côn tay.',
+  },
+  {
+    id: 'belt',
+    name: 'Dây curoa',
+    category: 'transmission',
+    interval: 20000,
+    icon: Repeat,
+    description: 'Dây đai truyền động chính trên các dòng xe tay ga.',
+  },
+  {
+    id: 'clutch',
+    name: 'Bố ba càng & Chuông nồi',
+    category: 'transmission',
+    interval: 20000,
+    icon: Disc,
+    description: 'Bộ ly hợp truyền công suất động cơ vào hệ thống dẫn động.',
+  },
+  {
+    id: 'gearOil',
+    name: 'Nhớt hộp số (Nhớt láp)',
+    category: 'transmission',
+    interval: 6000,
+    icon: Droplets,
+    description: 'Bôi trơn bộ bánh răng truyền động cầu sau xe tay ga.',
+  },
+  {
+    id: 'rollers',
+    name: 'Bi nồi & Kẹp trượt',
+    category: 'transmission',
+    interval: 15000,
+    icon: Sliders,
+    description: 'Bi văng ly hợp biến thiên tỉ số truyền theo vòng tua máy xe tay ga.',
+  },
+
+  // 3. Phanh & Lốp xe (Brakes & Tires)
+  {
+    id: 'frontBrake',
+    name: 'Bố thắng trước',
+    category: 'brakes_tires',
+    interval: 10000,
+    icon: ShieldAlert,
+    description: 'Má phanh đĩa hoặc bố thắng đùm hãm tốc độ bánh trước.',
+  },
+  {
+    id: 'rearBrake',
+    name: 'Bố thắng sau',
+    category: 'brakes_tires',
+    interval: 10000,
+    icon: ShieldAlert,
+    description: 'Má phanh đĩa hoặc bố đùm sau hãm tốc độ bánh sau.',
+  },
+  {
+    id: 'brakeFluid',
+    name: 'Dầu phanh (Dầu thắng)',
+    category: 'brakes_tires',
+    interval: 15000,
+    icon: Droplet,
+    description: 'Dung dịch truyền áp lực thủy lực từ tay thắng tới heo dầu.',
+  },
+  {
+    id: 'brakeRotor',
+    name: 'Đĩa phanh',
+    category: 'brakes_tires',
+    interval: 30000,
+    icon: CircleDot,
+    description: 'Đĩa ma sát bằng thép chịu lực gắn trên moay-ơ bánh xe.',
+  },
+  {
+    id: 'frontTire',
+    name: 'Lốp / Vỏ trước',
+    category: 'brakes_tires',
+    interval: 20000,
+    icon: CircleDot,
+    description: 'Lốp dẫn hướng tiếp xúc mặt đường và đảm bảo độ bám.',
+  },
+  {
+    id: 'rearTire',
+    name: 'Lốp / Vỏ sau',
+    category: 'brakes_tires',
+    interval: 15000,
+    icon: CircleDot,
+    description: 'Lốp chịu tải trọng chính và lực đẩy từ động cơ.',
+  },
+
+  // 4. Khung gầm & Giảm xóc (Chassis & Suspension)
+  {
+    id: 'frontFork',
+    name: 'Dầu phuộc & Phốt trước',
+    category: 'chassis_suspension',
+    interval: 25000,
+    icon: Activity,
+    description: 'Dầu thủy lực giảm xóc và phốt cao su ngăn rò rỉ dầu phuộc trước.',
+  },
+  {
+    id: 'rearShock',
+    name: 'Phuộc nhún sau',
+    category: 'chassis_suspension',
+    interval: 30000,
+    icon: Sliders,
+    description: 'Kiểm tra ty giảm xóc sau, lò xo và cao su giảm chấn.',
+  },
+  {
+    id: 'steeringBearing',
+    name: 'Bạc đạn bánh & Chén cổ',
+    category: 'chassis_suspension',
+    interval: 25000,
+    icon: Compass,
+    description: 'Ổ bi bánh xe và vòng bi chén cổ tay lái.',
+  },
+
+  // 5. Hệ thống điện & Phụ trợ (Electrical & Controls)
+  {
+    id: 'battery',
+    name: 'Bình ắc quy',
+    category: 'electrical',
+    interval: 25000,
+    icon: BatteryCharging,
+    description: 'Cung cấp nguồn điện khởi động động cơ và hệ thống ECU/FI.',
+  },
+  {
+    id: 'headlight',
+    name: 'Bóng đèn & Chiếu sáng',
+    category: 'electrical',
+    interval: 25000,
+    icon: Lightbulb,
+    description: 'Hệ thống đèn pha chính, xi-nhan và đèn hậu định vị.',
+  },
+  {
+    id: 'cables',
+    name: 'Dây ga & Dây côn',
+    category: 'electrical',
+    interval: 20000,
+    icon: Cpu,
+    description: 'Dây cáp cơ khí điều khiển bướm ga và bộ ngắt ly hợp.',
+  },
+];
+

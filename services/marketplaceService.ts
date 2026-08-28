@@ -626,6 +626,25 @@ export const cancelOrderAndReleaseProduct = async (
 };
 
 /**
+ * Xóa vĩnh viễn đơn hàng cũ / đã hủy khỏi hệ thống
+ */
+export const deleteMarketplaceOrder = async (orderId: string): Promise<void> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('UNAUTHORIZED_OPERATION');
+
+  const orderRef = doc(db, 'orders', orderId);
+  const snap = await getDoc(orderRef);
+  if (!snap.exists()) return;
+
+  const order = snap.data() as IOrder;
+  if (order.buyerId !== currentUser.uid && order.sellerId !== currentUser.uid) {
+    throw new Error('FORBIDDEN_OPERATION');
+  }
+
+  await deleteDoc(orderRef);
+};
+
+/**
  * Lắng nghe realtime danh sách đơn hàng của người dùng (mua và bán)
  */
 export const subscribeUserOrders = (

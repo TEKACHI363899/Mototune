@@ -183,13 +183,13 @@ export const SelectMeetupShopModal: React.FC<ISelectMeetupShopModalProps> = ({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>CHỌN ĐIỂM HẸN TẠI TRẠM</Text>
-            <Text style={styles.subTitle}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={styles.title} numberOfLines={1}>CHỌN ĐIỂM HẸN TẠI TRẠM</Text>
+            <Text style={styles.subTitle} numberOfLines={2}>
               Gặp mặt an toàn, có thợ cơ khí hỗ trợ tháo lắp thử đồ
             </Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <X size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>

@@ -44,9 +44,15 @@ service cloud.firestore {
     // Marketplace Products
     match /marketplace/{productId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.sellerId == request.auth.uid;
+      allow create: if isAuthenticated() && (
+        request.resource.data.authorId == request.auth.uid ||
+        request.resource.data.sellerId == request.auth.uid
+      );
       allow update: if isAuthenticated();
-      allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
     }
     
     // Orders
@@ -60,7 +66,10 @@ service cloud.firestore {
         resource.data.buyerId == request.auth.uid || 
         resource.data.sellerId == request.auth.uid
       );
-      allow delete: if false; // Không xóa đơn hàng, chỉ chuyển trạng thái CANCELLED
+      allow delete: if isAuthenticated() && (
+        resource.data.buyerId == request.auth.uid || 
+        resource.data.sellerId == request.auth.uid
+      );
       
       match /private/{document=**} {
         allow read, write: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
@@ -89,9 +98,14 @@ service cloud.firestore {
     
     // Friendships
     match /friendships/{friendshipId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.users;
-      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.users;
-      allow update, delete: if isAuthenticated() && request.auth.uid in resource.data.users;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        request.auth.uid in request.resource.data.users &&
+        request.resource.data.senderId == request.auth.uid
+      );
+      allow update, delete: if isAuthenticated() && (
+        request.auth.uid in resource.data.users
+      );
     }
     
     // Notifications

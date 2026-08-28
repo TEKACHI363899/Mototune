@@ -162,7 +162,7 @@ export const HandshakeQrModal: React.FC<IHandshakeQrModalProps> = ({
               {order.productTitle}
             </Text>
             <Text style={styles.productPrice}>
-              {order.totalAmount.toLocaleString('vi-VN')} đ
+              {((order.totalAmount ?? order.productPrice) ?? 0).toLocaleString('vi-VN')} đ
             </Text>
           </View>
 

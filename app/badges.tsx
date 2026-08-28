@@ -4,6 +4,7 @@ import * as Icons from 'lucide-react-native';
 import { CheckCircle2, ChevronLeft, Lock, Star, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 import { BADGE_RULES, BADGE_TIERS_COLORS, calculateBadgeTier } from '../utils/badgeConfig';
 import { HIGTheme } from '../constants/theme';
@@ -14,6 +15,7 @@ const TIER_KEYS = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
 
 export default function BadgesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [userStats, setUserStats] = useState<any>({});
   
   // 🛑 STATE MỚI: LƯU TRỮ DANH HIỆU ĐANG ĐƯỢC TRANG BỊ
@@ -201,7 +203,7 @@ export default function BadgesScreen() {
   const badgeList = BADGE_RULES ? Object.keys(BADGE_RULES).map(key => ({ key })) : [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><ChevronLeft size={28} color="#FFF" /></TouchableOpacity>
         <Text style={styles.headerTitle}>PHÒNG TRƯNG BÀY</Text>
@@ -214,7 +216,7 @@ export default function BadgesScreen() {
           keyExtractor={item => item.key}
           numColumns={2}
           renderItem={renderBadge}
-          contentContainerStyle={{ padding: 15 }}
+          contentContainerStyle={{ padding: 15, paddingBottom: Math.max(insets.bottom, 20) + 20 }}
           columnWrapperStyle={{ gap: 15 }}
         />
       ) : (
@@ -232,7 +234,7 @@ export default function BadgesScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 

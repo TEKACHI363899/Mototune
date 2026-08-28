@@ -47,6 +47,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Map from "../../components/Map";
 import { db } from "../../firebaseConfig";
 import { IBike } from "../../interfaces/bike";
@@ -113,6 +114,7 @@ TaskManager.defineTask(LOCATION_TRACKING_TASK, async ({ data, error }) => {
 
 
 export default function JourneyScreen() {
+  const insets = useSafeAreaInsets();
   const currentUser = useAppStore((state) => state.currentUser);
   const bikes = useAppStore((state) => state.bikes);
 
@@ -200,9 +202,10 @@ export default function JourneyScreen() {
 
   const executeStartJourney = async (bikeId: string) => {
     setShowBikeSelectModal(false);
-    setSelectedBikeId(bikeId);
+    const safeBikeId = bikeId || "default";
+    setSelectedBikeId(safeBikeId);
 
-    const selectedBike = bikes.find((b) => b.id === bikeId);
+    const selectedBike = bikes.find((b) => (b.id || "default") === safeBikeId);
     try {
       let speechText = `Chào Biker. Hệ thống HUD đã sẵn sàng trên xe ${selectedBike?.nickname || ""}.`;
       if (selectedBike) {
@@ -394,6 +397,8 @@ export default function JourneyScreen() {
 
     if (currentUser && totalDistance > 0.1 && selectedBikeId) {
       try {
+        const safeTargetId = selectedBikeId || "default";
+
         // Save trip to database with bikeId
         await addDoc(collection(db, "users", currentUser.uid, "trips"), {
           startTime,
@@ -402,7 +407,7 @@ export default function JourneyScreen() {
           avgSpeed,
           route: routeCoords,
           points: earnedPoints,
-          bikeId: selectedBikeId,
+          bikeId: safeTargetId,
         });
 
         // Update ODO of selected bike in user document array
@@ -417,8 +422,10 @@ export default function JourneyScreen() {
           }
           updatedBikes = currentBikes.map((b) => {
             const bId = b.id || "default";
-            if (bId === selectedBikeId) {
-              return { ...b, odo: (b.odo || 0) + totalDistance };
+            if (bId === safeTargetId) {
+              const currentBikeOdo = typeof b.odo === 'number' && Number.isFinite(b.odo) ? b.odo : 0;
+              const nextOdo = Math.min(1000000, Math.round((currentBikeOdo + totalDistance) * 10) / 10);
+              return { ...b, odo: nextOdo };
             }
             return b;
           });
@@ -434,8 +441,7 @@ export default function JourneyScreen() {
           const activeIndex = userDoc.data().activeBikeIndex ?? 0;
           if (
             updatedBikes[activeIndex] &&
-            (updatedBikes[activeIndex].id === selectedBikeId ||
-              (activeIndex === 0 && selectedBikeId === "default"))
+            ((updatedBikes[activeIndex].id || "default") === safeTargetId)
           ) {
             updateData.bike = updatedBikes[activeIndex];
           }
@@ -445,7 +451,7 @@ export default function JourneyScreen() {
           updateData["gamification.badges"] = arrayUnion(...newBadges);
         await setDoc(userDocRef, updateData, { merge: true });
 
-        // 🛑 TRIGGER 2: KIỂM TRA QUÃNG ĐƯỜNG ĐỂ CỘNG ĐIỂM BÀO PHỐ / ĐI TOUR
+        // TRIGGER 2: Kiem tra quang duong de cong diem bao pho / di tour
         if (totalDistance < 15) {
           await recordUserStat(currentUser.uid, "city_hunter", 1);
         } else if (totalDistance > 50) {
@@ -484,7 +490,7 @@ export default function JourneyScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
       {crashDetected && (
         <View style={styles.crashOverlay}>
           <AlertTriangle size={80} color="white" />
@@ -654,7 +660,7 @@ export default function JourneyScreen() {
           </View>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -722,7 +728,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   hudScrollView: { flex: 1, backgroundColor: COLORS.bg },
-  hudScrollContent: { padding: 20, paddingBottom: 40 },
+  hudScrollContent: { padding: 20, paddingBottom: 110 },
   hudMain: { alignItems: "center", marginTop: 20, marginBottom: 25 },
   speedCircle: {
     width: 140,

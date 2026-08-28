@@ -12,6 +12,7 @@ import { subscribeFriends, subscribePendingReceivedRequests } from '../../servic
 import { subscribeNotifications } from '../../services/notificationService';
 
 import { useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Central Constants
 import { HIGTheme, HIGSpacing, HIGTouchTarget, HIGTypography } from '../../constants/theme';
 
@@ -238,12 +239,14 @@ export default function GarageScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.systemBackground }]}>
+    <View style={[styles.container, { backgroundColor: colors.systemBackground }]}>
       <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={colors.systemBackground} />
       
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.separator }]}>
+      <View style={[styles.header, { borderBottomColor: colors.separator, paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) }]}>
         <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerNotifBtn}>
           <Bell size={24} color={colors.label} />
           {unreadNotifsCount > 0 && (
@@ -362,12 +365,12 @@ export default function GarageScreen() {
                   {/* Action Buttons */}
                   <View style={styles.twinButtonsRow}>
                     <TouchableOpacity style={[styles.twinBtn, { backgroundColor: colors.secondarySystemBackground, borderColor: colors.separator }]} onPress={() => setShowHistory(true)}>
-                      <Map size={24} color={colors.label} />
-                      <Text style={[styles.twinBtnText, { color: colors.label }]}>HÀNH TRÌNH</Text>
+                      <Map size={22} color={colors.label} />
+                      <Text style={[styles.twinBtnText, { color: colors.label }]} numberOfLines={1} adjustsFontSizeToFit>HÀNH TRÌNH</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.twinBtnInfo, { backgroundColor: theme === 'dark' ? '#1a2b3c' : '#e6f0fa', borderColor: colors.systemBlue }]} onPress={() => setShowLogbook(true)}>
-                      <BookOpen size={24} color={colors.systemBlue} />
-                      <Text style={[styles.twinBtnTextInfo, { color: colors.systemBlue }]}>LỊCH SỬ BẢO TRÌ</Text>
+                      <BookOpen size={22} color={colors.systemBlue} />
+                      <Text style={[styles.twinBtnTextInfo, { color: colors.systemBlue }]} numberOfLines={1} adjustsFontSizeToFit>LỊCH SỬ BẢO TRÌ</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -444,13 +447,13 @@ export default function GarageScreen() {
         onShareToFeed={handleShareToFeed}
         onSendInChat={handleSendInChat}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, alignItems: 'center', marginTop: Platform.OS === 'android' ? 25 : 0 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
   headerNotifBtn: { minHeight: HIGTouchTarget.min, minWidth: HIGTouchTarget.min, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   notifBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#E31B23', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   notifBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },

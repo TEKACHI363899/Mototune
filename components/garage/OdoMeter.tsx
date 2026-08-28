@@ -21,9 +21,9 @@ export default function OdoMeter({ bikeObj, uid, onOdoUpdated }: IOdoMeterProps)
   const currentOdo = bikeObj.odo || 0;
 
   const handleSaveOdo = async () => {
-    const newOdo = parseInt(tempOdo, 10);
-    if (isNaN(newOdo) || newOdo < currentOdo) {
-      Alert.alert("Lỗi", "Số ODO mới không hợp lệ hoặc nhỏ hơn ODO cũ!");
+    const newOdo = parseInt(tempOdo.trim(), 10);
+    if (isNaN(newOdo) || newOdo < currentOdo || newOdo > 1000000) {
+      Alert.alert("Lỗi", "Số ODO mới không hợp lệ (phải từ ODO hiện tại đến 1.000.000 km)!");
       return;
     }
     try {
