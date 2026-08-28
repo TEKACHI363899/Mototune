@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, SafeAreaView, View, Text, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Image, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Bot, User, Map, BookOpen, PlusCircle } from 'lucide-react-native';
+import { Wrench, LifeBuoy, User, Map, BookOpen, PlusCircle, Bell } from 'lucide-react-native';
 
 import { useAppStore } from '../../store/useAppStore';
 import { deleteBike } from '../../services/bikeService';
 import { IBike } from '../../interfaces/bike';
+import { ILastJourneyData, IFriendTrip } from '../../interfaces/social';
+import { getLastJourney, fetchFriendsTrips, shareTripToFeed } from '../../services/journeySocialService';
+import { subscribeFriends, subscribePendingReceivedRequests } from '../../services/friendService';
+import { subscribeNotifications } from '../../services/notificationService';
 
 import { useColorScheme } from 'react-native';
 // Central Constants
@@ -19,6 +23,11 @@ import QuickLogModal from '../../components/garage/QuickLogModal';
 import TripHistoryModal from '../../components/garage/TripHistoryModal';
 import ServiceLogModal from '../../components/garage/ServiceLogModal';
 import BikeEditor from '../../components/garage/BikeEditor';
+import LastJourneyCard from '../../components/garage/LastJourneyCard';
+import FriendsInMotionCard from '../../components/garage/FriendsInMotionCard';
+import FriendsTripsModal from '../../components/garage/FriendsTripsModal';
+import TripDetailModal from '../../components/garage/TripDetailModal';
+import ShareRideModal from '../../components/garage/ShareRideModal';
 
 export default function GarageScreen() {
   const router = useRouter();
@@ -40,8 +49,105 @@ export default function GarageScreen() {
   const [showLogbook, setShowLogbook] = useState<boolean>(false);
   const [activePartService, setActivePartService] = useState<{ id: string; name: string } | null>(null);
 
+  // Journey & Friends in motion state
+  const [lastJourney, setLastJourney] = useState<ILastJourneyData | null>(null);
+  const [journeyLoading, setJourneyLoading] = useState<boolean>(true);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
+
+  const [friendTrips, setFriendTrips] = useState<IFriendTrip[]>([]);
+  const [friendUids, setFriendUids] = useState<string[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState<boolean>(true);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+
+  const [showAllTripsModal, setShowAllTripsModal] = useState<boolean>(false);
+  const [selectedTrip, setSelectedTrip] = useState<IFriendTrip | null>(null);
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
+
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
+
   // Computes active bike object dynamically from state
   const bikeObj = bikes[activeBikeIndex] || null;
+
+  const loadLastJourney = useCallback(async () => {
+    if (!currentUser) {
+      setLastJourney(null);
+      setJourneyLoading(false);
+      return;
+    }
+    setJourneyLoading(true);
+    setJourneyError(null);
+    try {
+      const journey = await getLastJourney(currentUser.uid);
+      setLastJourney(journey);
+    } catch (err: any) {
+      setJourneyError(err?.message || 'Không thể tải hành trình.');
+    } finally {
+      setJourneyLoading(false);
+    }
+  }, [currentUser]);
+
+  const loadFriendsTrips = useCallback(async (friendIds: string[]) => {
+    if (!currentUser || friendIds.length === 0) {
+      setFriendTrips([]);
+      setFriendsLoading(false);
+      return;
+    }
+    setFriendsLoading(true);
+    setFriendsError(null);
+    try {
+      const trips = await fetchFriendsTrips(friendIds);
+      setFriendTrips(trips);
+    } catch (err: any) {
+      setFriendsError(err?.message || 'Không thể tải hành trình bạn bè.');
+    } finally {
+      setFriendsLoading(false);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadLastJourney();
+  }, [loadLastJourney]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubFriends = subscribeFriends(currentUser.uid, (friends) => {
+      const uids = friends.map((f) => f.users.find((u) => u !== currentUser.uid) || '').filter(Boolean);
+      setFriendUids(uids);
+      loadFriendsTrips(uids);
+    });
+
+    const unsubNotifs = subscribeNotifications(currentUser.uid, (notifs) => {
+      const unread = notifs.filter((n) => !n.isRead).length;
+      setUnreadNotifsCount(unread);
+    });
+
+    return () => {
+      unsubFriends();
+      unsubNotifs();
+    };
+  }, [currentUser, loadFriendsTrips]);
+
+  const handleShareToFeed = async () => {
+    if (!currentUser || !lastJourney) {
+      setShowShareModal(false);
+      router.push('/create-post');
+      return;
+    }
+    setShowShareModal(false);
+    try {
+      await shareTripToFeed(currentUser.uid, lastJourney, `Hành trình mới hoàn thành: ${lastJourney.distanceKm.toFixed(1)} km`);
+      Alert.alert('Thành công', 'Đã chia sẻ hành trình lên Bảng tin!');
+    } catch (error) {
+      console.error('Error sharing trip to feed:', error);
+      Alert.alert('Lỗi', 'Không thể chia sẻ hành trình lúc này.');
+    }
+  };
+
+  const handleSendInChat = () => {
+    setShowShareModal(false);
+    router.push('/inbox');
+  };
 
   const handleSwitchBike = async (index: number) => {
     try {
@@ -138,7 +244,16 @@ export default function GarageScreen() {
       
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-        <View style={styles.headerPlaceholder} />
+        <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerNotifBtn}>
+          <Bell size={24} color={colors.label} />
+          {unreadNotifsCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>
+                {unreadNotifsCount > 99 ? '99+' : unreadNotifsCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.label }]}>GARAGE</Text>
         <TouchableOpacity onPress={() => router.push('/profile')} style={styles.headerAvatarBtn}>
           {currentUser?.photoURL ? (
@@ -252,9 +367,30 @@ export default function GarageScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.twinBtnInfo, { backgroundColor: theme === 'dark' ? '#1a2b3c' : '#e6f0fa', borderColor: colors.systemBlue }]} onPress={() => setShowLogbook(true)}>
                       <BookOpen size={24} color={colors.systemBlue} />
-                      <Text style={[styles.twinBtnTextInfo, { color: colors.systemBlue }]}>Y BẠ KỸ THUẬT</Text>
+                      <Text style={[styles.twinBtnTextInfo, { color: colors.systemBlue }]}>LỊCH SỬ BẢO TRÌ</Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Last Journey Section */}
+                  <LastJourneyCard
+                    journey={lastJourney}
+                    loading={journeyLoading}
+                    error={journeyError}
+                    onRetry={loadLastJourney}
+                    onStartNewJourney={() => router.push('/journey')}
+                  />
+
+                  {/* Friends in Motion Section */}
+                  <FriendsInMotionCard
+                    friendTrips={friendTrips}
+                    loading={friendsLoading}
+                    error={friendsError}
+                    onRetry={() => loadFriendsTrips(friendUids)}
+                    onViewAll={() => setShowAllTripsModal(true)}
+                    onSelectTrip={(trip) => setSelectedTrip(trip)}
+                    onShareRide={() => setShowShareModal(true)}
+                  />
+
                   <View style={styles.footerSpacing} />
                 </View>
               </View>
@@ -285,14 +421,29 @@ export default function GarageScreen() {
         )}
       </ScrollView>
 
-      {/* Floating Action Button for AI Mechanic Chatbot */}
-      <TouchableOpacity 
-        style={[styles.fabBot, { backgroundColor: colors.systemRed, shadowColor: colors.systemRed }]} 
-        onPress={() => router.push('/ai-mechanic')} 
-        activeOpacity={0.8}
-      >
-        <Bot size={28} color="white" />
-      </TouchableOpacity>
+      {/* Social & Journey Modals */}
+      <FriendsTripsModal
+        visible={showAllTripsModal}
+        friendTrips={friendTrips}
+        onClose={() => setShowAllTripsModal(false)}
+        onSelectTrip={(trip) => {
+          setShowAllTripsModal(false);
+          setSelectedTrip(trip);
+        }}
+      />
+
+      <TripDetailModal
+        visible={!!selectedTrip}
+        trip={selectedTrip}
+        onClose={() => setSelectedTrip(null)}
+      />
+
+      <ShareRideModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        onShareToFeed={handleShareToFeed}
+        onSendInChat={handleSendInChat}
+      />
     </SafeAreaView>
   );
 }
@@ -300,7 +451,9 @@ export default function GarageScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, alignItems: 'center', marginTop: Platform.OS === 'android' ? 25 : 0 },
-  headerPlaceholder: { width: 35 },
+  headerNotifBtn: { minHeight: HIGTouchTarget.min, minWidth: HIGTouchTarget.min, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  notifBadge: { position: 'absolute', top: 4, right: 4, backgroundColor: '#E31B23', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  notifBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: 2 },
   headerAvatarBtn: { minHeight: HIGTouchTarget.min, minWidth: HIGTouchTarget.min, alignItems: 'center', justifyContent: 'center' },
   headerAvatar: { width: 35, height: 35, borderRadius: 18, borderWidth: 1 },

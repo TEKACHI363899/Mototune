@@ -389,8 +389,8 @@ export default function JourneyScreen() {
     const earnedPoints = Math.floor(totalDistance * 10);
     let newBadges: string[] = [];
     if (totalDistance > 10 && avgSpeed < 50)
-      newBadges.push("Tay Lái Cẩn Thận 🛡️");
-    if (totalDistance > 50) newBadges.push("Phượt Thủ Bền Bỉ 🦅");
+      newBadges.push("Tay Lái Cẩn Thận");
+    if (totalDistance > 50) newBadges.push("Phượt Thủ Bền Bỉ");
 
     if (currentUser && totalDistance > 0.1 && selectedBikeId) {
       try {

@@ -3,31 +3,33 @@ const API_KEY = process.env.EXPO_PUBLIC_MOTO_TUNE_API_KEY || '';
 
 /**
  * Uses Gemini API (via Backend Proxy) to extract ODO mileage from an image base64 string (OCR)
- * @param base64Image Base64 representation of the image
- * @returns Extracted ODO digits as string
  */
 export const scanOdoWithGemini = async (base64Image: string): Promise<string> => {
   const url = `${BACKEND_URL}/api/gemini/scan-odo`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-    body: JSON.stringify({ base64Image })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Gemini OCR failed");
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+      body: JSON.stringify({ base64Image })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Gemini OCR failed");
+    }
+
+    return data.odo;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data.odo;
 };
 
 /**
  * Fetches a conversational response from Gemini (via Backend Proxy) based on chat history and current message
- * @param messages Array of previous chat messages
- * @param userMessage New message text
- * @param systemPrompt System instructions instructing the AI model
- * @returns AI model's response content
  */
 export const fetchAITextResponse = async (
   messages: { id: string; text: string; sender: 'user' | 'bot'; isVideo?: boolean }[],
@@ -44,29 +46,34 @@ export const fetchAITextResponse = async (
       parts: [{ text: msg.text }]
     }));
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-    body: JSON.stringify({
-      messages: chatHistory,
-      userMessage,
-      systemPrompt
-    })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Gemini response error");
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+      body: JSON.stringify({
+        messages: chatHistory,
+        userMessage,
+        systemPrompt
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Gemini response error");
+    }
+
+    return data.reply;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data.reply;
 };
 
 /**
  * Uploads a video to Backend Proxy, which forwards to Gemini Files API, waits for processing, and then generates diagnostic content
- * @param videoUri Local video file URI
- * @param systemPrompt System instructions instructing the AI model
- * @returns AI model's diagnosis response text
  */
 export const fetchAIVideoResponse = async (
   videoUri: string,
@@ -83,19 +90,26 @@ export const fetchAIVideoResponse = async (
   } as any);
   formData.append('systemPrompt', systemPrompt);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      // Content-Type is set automatically by React Native when FormData is used
-      Accept: 'application/json', 'x-api-key': API_KEY
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for video
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      body: formData,
+      headers: {
+        Accept: 'application/json', 'x-api-key': API_KEY
+      }
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Gemini video response error");
     }
-  });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Gemini video response error");
+    return data.diagnosis;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data.diagnosis;
 };

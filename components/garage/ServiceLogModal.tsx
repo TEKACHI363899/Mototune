@@ -45,7 +45,7 @@ export default function ServiceLogModal({ visible, uid, onClose }: IServiceLogMo
           setLogs(logData);
         } catch (error) {
           console.error("Error loading service logs:", error);
-          Alert.alert("Lỗi", "Không thể tải y bạ kỹ thuật.");
+          Alert.alert("Lỗi", "Không thể tải lịch sử bảo trì.");
         } finally {
           setIsLoading(false);
         }
@@ -141,7 +141,7 @@ export default function ServiceLogModal({ visible, uid, onClose }: IServiceLogMo
           {/* Header */}
           <View style={styles.modalHeader}>
             <BookOpen size={24} color={COLORS.info} />
-            <Text style={styles.modalTitle}>Y BẠ KỸ THUẬT</Text>
+            <Text style={styles.modalTitle}>LỊCH SỬ BẢO TRÌ</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>Đóng</Text>
             </TouchableOpacity>

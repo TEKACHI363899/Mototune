@@ -20,18 +20,28 @@ export const uploadToCloudinary = async (uri: string, type: 'image' | 'video' | 
   const apiUrl = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`;
 
   if (Platform.OS === 'web') {
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    const data = new FormData();
-    data.append('file', blob);
-    data.append('upload_preset', UPLOAD_PRESET);
-    
-    const response = await fetch(apiUrl, { method: 'POST', body: data });
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error?.message || "Web Cloudinary upload failed");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    try {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      const data = new FormData();
+      data.append('file', blob);
+      data.append('upload_preset', UPLOAD_PRESET);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        body: data,
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error?.message || "Web Cloudinary upload failed");
+      }
+      return result.secure_url;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return result.secure_url;
   } else {
     const response = await uploadAsync(apiUrl, uri, {
       httpMethod: 'POST',

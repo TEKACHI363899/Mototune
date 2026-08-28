@@ -71,9 +71,9 @@ export default function QuickLogModal({ activePartService, bikeObj, uid, onClose
       onSuccess(updatedBike);
       
       if (Platform.OS === 'web') {
-        window.alert(`✅ Đã lưu Y bạ và làm mới hao mòn cho [${activePartService.name}]!`);
+        window.alert(`Đã lưu Lịch sử bảo trì và làm mới hao mòn cho [${activePartService.name}]!`);
       } else {
-        Alert.alert("Thành công", `Đã lưu Y bạ và làm mới hao mòn cho [${activePartService.name}]!`);
+        Alert.alert("Thành công", `Đã lưu Lịch sử bảo trì và làm mới hao mòn cho [${activePartService.name}]!`);
       }
     } catch (error) {
       console.error("Lỗi Firestore:", error);

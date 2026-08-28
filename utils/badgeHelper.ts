@@ -1,16 +1,26 @@
 import { doc, increment, setDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { db, auth } from '../firebaseConfig';
 
-export const recordUserStat = async (userId: string, statId: string, amount: number = 1) => {
-  if (!userId) return;
+export const recordUserStat = async (
+  userId: string,
+  statId: string,
+  amount: number = 1
+): Promise<void> => {
+  if (!userId || auth.currentUser?.uid !== userId || amount > 10 || amount <= 0) {
+    return;
+  }
   try {
     const userRef = doc(db, 'users', userId);
-    await setDoc(userRef, {
-      stats: {
-        [statId]: increment(amount)
-      }
-    }, { merge: true });
+    await setDoc(
+      userRef,
+      {
+        stats: {
+          [statId]: increment(amount),
+        },
+      },
+      { merge: true }
+    );
   } catch (error) {
-    console.error("Lỗi cập nhật chỉ số:", error);
+    console.error('[BadgeHelper] Error recording user stat:', error);
   }
 };

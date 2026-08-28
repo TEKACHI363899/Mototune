@@ -7,6 +7,8 @@ import { db } from '../firebaseConfig';
 // 🛑 IMPORT THÊM BADGE_RULES VÀ calculateBadgeTier
 import { BADGE_RULES, BADGE_TIERS_COLORS, calculateBadgeTier, getHighestBadge } from '../utils/badgeConfig';
 
+const badgeCache = new Map<string, any>();
+
 export default function UserBadge({ userId, size = 16, realtime = false }: { userId: string, size?: number, realtime?: boolean }) {
   const [displayBadge, setDisplayBadge] = useState<any>(null);
 
@@ -48,19 +50,31 @@ export default function UserBadge({ userId, size = 16, realtime = false }: { use
       // Dùng cho trang Profile (Cập nhật lập tức khi vừa đổi trang bị)
       const unsubscribe = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
-          setDisplayBadge(processBadgeData(docSnap.data()));
+          const badge = processBadgeData(docSnap.data());
+          badgeCache.set(userId, badge);
+          setDisplayBadge(badge);
         }
       });
       return () => unsubscribe();
     } else {
-      // Dùng cho Bảng tin Explore (Đọc 1 lần cho mượt mà Bảng tin)
-      getDoc(userRef).then((docSnap) => {
-        if (docSnap.exists()) {
-          setDisplayBadge(processBadgeData(docSnap.data()));
-        }
-      });
+      // Dùng cho Bảng tin Explore (Kiểm tra cache trước, tránh N+1 read)
+      if (badgeCache.has(userId)) {
+        setDisplayBadge(badgeCache.get(userId));
+      } else {
+        getDoc(userRef)
+          .then((docSnap) => {
+            if (docSnap.exists()) {
+              const badge = processBadgeData(docSnap.data());
+              badgeCache.set(userId, badge);
+              setDisplayBadge(badge);
+            }
+          })
+          .catch((err) => {
+            console.error('[UserBadge Fetch Error]', err);
+          });
+      }
     }
-  }, [userId]);
+  }, [userId, realtime]);
 
   if (!displayBadge) return null; // Tàng hình nếu chưa có thành tựu gì
 

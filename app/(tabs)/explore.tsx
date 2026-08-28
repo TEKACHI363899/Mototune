@@ -1,8 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
-import { Flame, MessageCircle, MoreHorizontal, Plus, Send, Trash2, X, Search } from 'lucide-react-native';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, increment, onSnapshot, orderBy, query, updateDoc, where, limit } from 'firebase/firestore';
+import { Flame, MessageCircle, MoreHorizontal, Plus, Send, Trash2, X, Search, Bell } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
@@ -47,11 +47,15 @@ const PostCard = ({ item, onComment, router }: IPostCardProps) => {
   const handleLike = async () => {
     if (!currentUser) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const postRef = doc(db, 'posts', item.id);
-    if (isLikedByMe) {
-      await updateDoc(postRef, { likedBy: arrayRemove(currentUser.uid), likesCount: increment(-1) });
-    } else {
-      await updateDoc(postRef, { likedBy: arrayUnion(currentUser.uid), likesCount: increment(1) });
+    try {
+      const postRef = doc(db, 'posts', item.id);
+      if (isLikedByMe) {
+        await updateDoc(postRef, { likedBy: arrayRemove(currentUser.uid), likesCount: increment(-1) });
+      } else {
+        await updateDoc(postRef, { likedBy: arrayUnion(currentUser.uid), likesCount: increment(1) });
+      }
+    } catch (error) {
+      console.error('handleLike error:', error);
     }
   };
 
@@ -87,6 +91,7 @@ const PostCard = ({ item, onComment, router }: IPostCardProps) => {
   };
 
   const handleDeletePost = () => {
+    if (!currentUser || currentUser.uid !== item.authorId) return;
     if (Platform.OS === 'web') {
       const confirmDelete = window.confirm("Bài viết này sẽ bị xóa vĩnh viễn khỏi bảng tin. Bạn có chắc không?");
       if (confirmDelete) {
@@ -170,20 +175,36 @@ export default function ExploreScreen() {
   const [comments, setComments] = useState<IComment[]>([]);
   const [newComment, setNewComment] = useState('');
 
+  const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
+
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as IPost)));
+      setLoading(false);
+    }, (err) => {
+      console.error('[Explore Posts Listener Error]', err);
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const qUsers = query(collection(db, 'users'), limit(50));
+    const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribeUsers();
+  }, []);
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const qNotifs = query(collection(db, 'notifications'), where('userId', '==', currentUser.uid), where('isRead', '==', false));
+    const unsubNotifs = onSnapshot(qNotifs, (snapshot) => {
+      setUnreadNotifs(snapshot.size);
+    });
+    return () => unsubNotifs();
   }, []);
 
   useEffect(() => {
@@ -276,7 +297,17 @@ export default function ExploreScreen() {
       <View style={styles.appHeaderWrapper}>
         <View style={styles.appHeader}>
           <Text style={styles.headerLogo}>MOTO<Text style={{color: COLORS.primary}}>TUNE</Text></Text>
-          <View style={{flexDirection: 'row', gap: 20, alignItems: 'center'}}>
+          <View style={{flexDirection: 'row', gap: 16, alignItems: 'center'}}>
+            <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerNotifBtn}>
+              <Bell size={26} color={COLORS.text} />
+              {unreadNotifs > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/create-post')}><Plus size={28} color={COLORS.text} /></TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/inbox' as any)}><MessageCircle size={28} color={COLORS.text} /></TouchableOpacity>
           </View>
@@ -378,6 +409,9 @@ const styles = StyleSheet.create({
   appHeaderWrapper: { width: '100%', borderBottomWidth: 1, borderBottomColor: '#222', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 25) : 0, backgroundColor: COLORS.bg },
   appHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, maxWidth: 600, width: '100%', alignSelf: 'center' },
   headerLogo: { color: COLORS.text, fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
+  headerNotifBtn: { position: 'relative', padding: 4, justifyContent: 'center', alignItems: 'center' },
+  notifBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: '#E31B23', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  notifBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   searchBarContainer: { paddingHorizontal: 15, paddingBottom: 12, maxWidth: 600, width: '100%', alignSelf: 'center' },
   searchInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 20, paddingHorizontal: 12, height: 40, borderWidth: 1, borderColor: '#333' },
   searchIcon: { marginRight: 8 },
